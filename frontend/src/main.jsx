@@ -37,7 +37,13 @@ async function authRequest(path, body) {
     throw new Error('We couldn’t connect just now. Please try again in a moment.');
   }
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || 'The request could not be completed.');
+  if (!response.ok) {
+    if (response.status >= 500) {
+      console.error('HadaLink API returned a server error:', response.status, payload.error || payload);
+      throw new Error('We couldn’t complete that just now. Please try again in a moment.');
+    }
+    throw new Error(payload.error || 'The request could not be completed.');
+  }
   return payload;
 }
 const navItems = [
