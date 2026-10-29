@@ -10,7 +10,6 @@ backend/    Express API starter
 ## Frontend
 
 ```sh
-cd frontend
 npm install
 npm run dev
 ```
@@ -21,6 +20,10 @@ To create and preview a production build:
 npm run build
 npm run preview
 ```
+
+The root npm workspace installs the frontend dependencies and lets deployment
+platforms build the frontend from the repository root. The backend remains an
+independent app with its own dependencies.
 
 ## Backend
 

@@ -1,0 +1,13 @@
+{
+  "name": "hadalink",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace hadalink-frontend",
+    "build": "vite build",
+    "preview": "npm run preview --workspace hadalink-frontend"
+  }
+}
