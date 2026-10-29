@@ -21,6 +21,25 @@ const requests = [
   { id: 'HL-8015', farmer: 'Ngozi Okafor', place: 'Jos South, Vom', service: 'Planting', machine: 'Baldan 4-Row Planter', hectares: '5.0 ha', amount: '₦150,000', date: '25 Oct 2026', status: 'Accepted' },
   { id: 'HL-7988', farmer: 'Ezekiel Chollom', place: 'Riyom LGA', service: 'Spraying', machine: 'Jacto Condor 600L', hectares: '15.0 ha', amount: '₦225,000', date: '22 Oct 2026', status: 'Completed' },
 ];
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
+
+async function authRequest(path, body) {
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    console.error('HadaLink API request failed:', error);
+    throw new Error('We couldn’t connect just now. Please try again in a moment.');
+  }
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || 'The request could not be completed.');
+  return payload;
+}
 const navItems = [
   { id: 'Dashboard', icon: Home }, { id: 'My Machinery', icon: Tractor }, { id: 'Add Machinery', icon: Plus }, { id: 'Requests', icon: MessageCircle }, { id: 'Calendar', icon: CalendarDays }, { id: 'Analytics', icon: Gauge }, { id: 'Earnings', icon: Wallet }, { id: 'Reviews', icon: Star }, { id: 'Settings', icon: Settings },
 ];
@@ -116,6 +135,28 @@ function App() {
   const isFarmer = signupRole === 'Farmer';
   const quickNavItems = mobileQuickNav;
   const toggleTheme = () => setTheme(value => value === 'dark' ? 'light' : 'dark');
+  const publicPages = ['landing', 'About', 'login', 'register', 'forgot'];
+  React.useEffect(() => {
+    if (publicPages.includes(page)) return undefined;
+    let active = true;
+    fetch(`${API_BASE}/auth/me`, { credentials: 'include' })
+      .then(response => {
+        if (!response.ok) throw new Error('Not signed in');
+        return response.json();
+      })
+      .then(({ data }) => {
+        if (!active || !data?.user) return;
+        const role = data.user.role === 'provider' ? 'Provider' : 'Farmer';
+        localStorage.setItem('hadalink-role', role);
+        setSignupRole(role);
+      })
+      .catch(() => {
+        if (!active) return;
+        history.replaceState({ page: 'login' }, '', '/login');
+        setPage('login');
+      });
+    return () => { active = false; };
+  }, [page]);
   React.useEffect(() => { localStorage.setItem('hadalink-machines', JSON.stringify(machinesState)); }, [machinesState]);
   React.useEffect(() => { localStorage.setItem('hadalink-requests', JSON.stringify(requestsState)); }, [requestsState]);
   React.useEffect(() => {
@@ -153,6 +194,10 @@ function App() {
     };
   },[page]);
   function flash(text){setNotice(text);window.clearTimeout(window.__hadalinkToast);window.__hadalinkToast=window.setTimeout(()=>setNotice(''),3200)}
+  async function logout() {
+    try { await authRequest('/auth/logout', {}); } catch { /* The local route still exits if the session has expired. */ }
+    go('login');
+  }
   const userLink=(p,label)=> <button className="text-link" onClick={()=>go(p)}>{label}</button>;
   React.useEffect(() => {
     if (!notificationsOpen) return undefined;
@@ -164,12 +209,12 @@ function App() {
   if(page==='landing') return <Landing go={go} theme={theme} toggleTheme={toggleTheme}/>
   if(page==='About') return <AboutPage go={go} theme={theme} toggleTheme={toggleTheme}/>
   const current = isFarmer && page === 'Dashboard' ? 'Find machinery for your farm' : titles[page] || titles.Dashboard;
-  return <div className="portal"><aside className={`sidebar ${mobileNav?'sidebar-open':''}`}><button className="brand" onClick={()=>go('Dashboard')}><span className="brand-icon"><img src="/hadalink-mark.png" alt="" /></span><span className="brand-text">Hada<span>Link</span><small>AGRI-RENTALS</small></span></button><span className="sidebar-caption">{isFarmer ? 'FARMER WORKSPACE' : 'PROVIDER WORKSPACE'}</span><nav className="side-nav">{(isFarmer ? navItems.slice(0, 1) : navItems).map(({id,icon:Icon})=><button key={id} onClick={()=>go(id)} className={`nav-item ${page===id?'active':''}`}><Icon size={17}/><span>{id==='Dashboard'?'Dashboard':id}</span>{id==='Requests'&&<span className="nav-count">3</span>}{id==='Add Machinery'&&<span className="nav-add"><Plus size={13}/></span>}</button>)}</nav><div className="sidebar-tools" aria-label="Quick settings"><button className="sidebar-tool" aria-label="Notifications" onClick={()=>setNotificationsOpen(true)}><Bell size={16}/><span>Notifications</span></button><button className="sidebar-tool" onClick={toggleTheme}><span className="sidebar-tool-icon">{theme==='dark'?<Sun size={16}/>:<Moon size={16}/>}</span><span>{theme==='dark'?'Light mode':'Dark mode'}</span></button></div><div className="side-help"><div className="help-icon"><CircleHelp size={17}/></div><strong>Need a hand?</strong><span>Our local team is here for you.</span></div><button className="logout" onClick={()=>setLogoutConfirmOpen(true)}><LogOut size={16}/> Log out</button></aside>{mobileNav&&<button aria-label="Close menu" className="mobile-backdrop" onClick={event=>closePopup(setMobileNav,event)}/>}     <div className="portal-main"><header className="topbar"><label className="global-search"><Search size={16}/><input aria-label="Search machinery and requests" placeholder="Search machinery or requests…" value={search} onChange={e=>setSearch(e.target.value)}/>{search&&<button aria-label="Clear search" onClick={()=>setSearch('')}><X size={14}/></button>}</label><div className="notification-wrap"><button className="icon-button notification" aria-label="Notifications" aria-expanded={notificationsOpen} onClick={()=>setNotificationsOpen(open => !open)}><Bell size={17}/><i/></button></div><button className="icon-button notification desktop-notification" aria-label="Notifications" onClick={()=>setNotificationsOpen(true)}><Bell size={16}/><i/></button><ThemeToggle theme={theme} onToggle={toggleTheme}/><span className="desktop-account-logo"><span className="avatar-logo"><img src="/hadalink-mark.png" alt=""/></span></span><div className={`account-menu ${accountMenuOpen?'open':''}`}><button className="account-trigger" aria-label="Account menu" aria-expanded={accountMenuOpen} onClick={()=>setAccountMenuOpen(open=>!open)}><span className="avatar-logo"><img src="/hadalink-mark.png" alt=""/></span><ChevronDown size={14}/></button>{accountMenuOpen&&<button className="account-modal-backdrop" aria-label="Dismiss account menu" onClick={event=>closePopup(setAccountMenuOpen,event)}><span className="account-dropdown" onClick={event=>event.stopPropagation()}><span>{isFarmer?'Farmer account':'Musa Ibrahim'}</span><span className="account-theme-toggle" onClick={()=>toggleTheme()}>{theme==='dark'?<Sun size={15}/>:<Moon size={15}/>}Switch to {theme==='dark'?'light':'dark'} mode</span><span role="button" tabIndex={0} onClick={()=>{setAccountMenuOpen(false);go('login')}}><LogOut size={15}/>Log out</span></span></button>}</div></header>
+  return <div className="portal"><aside className={`sidebar ${mobileNav?'sidebar-open':''}`}><button className="brand" onClick={()=>go('Dashboard')}><span className="brand-icon"><img src="/hadalink-mark.png" alt="" /></span><span className="brand-text">Hada<span>Link</span><small>AGRI-RENTALS</small></span></button><span className="sidebar-caption">{isFarmer ? 'FARMER WORKSPACE' : 'PROVIDER WORKSPACE'}</span><nav className="side-nav">{(isFarmer ? navItems.slice(0, 1) : navItems).map(({id,icon:Icon})=><button key={id} onClick={()=>go(id)} className={`nav-item ${page===id?'active':''}`}><Icon size={17}/><span>{id==='Dashboard'?'Dashboard':id}</span>{id==='Requests'&&<span className="nav-count">3</span>}{id==='Add Machinery'&&<span className="nav-add"><Plus size={13}/></span>}</button>)}</nav><div className="sidebar-tools" aria-label="Quick settings"><button className="sidebar-tool" aria-label="Notifications" onClick={()=>setNotificationsOpen(true)}><Bell size={16}/><span>Notifications</span></button><button className="sidebar-tool" onClick={toggleTheme}><span className="sidebar-tool-icon">{theme==='dark'?<Sun size={16}/>:<Moon size={16}/>}</span><span>{theme==='dark'?'Light mode':'Dark mode'}</span></button></div><div className="side-help"><div className="help-icon"><CircleHelp size={17}/></div><strong>Need a hand?</strong><span>Our local team is here for you.</span></div><button className="logout" onClick={()=>setLogoutConfirmOpen(true)}><LogOut size={16}/> Log out</button></aside>{mobileNav&&<button aria-label="Close menu" className="mobile-backdrop" onClick={event=>closePopup(setMobileNav,event)}/>}     <div className="portal-main"><header className="topbar"><label className="global-search"><Search size={16}/><input aria-label="Search machinery and requests" placeholder="Search machinery or requests…" value={search} onChange={e=>setSearch(e.target.value)}/>{search&&<button aria-label="Clear search" onClick={()=>setSearch('')}><X size={14}/></button>}</label><div className="notification-wrap"><button className="icon-button notification" aria-label="Notifications" aria-expanded={notificationsOpen} onClick={()=>setNotificationsOpen(open => !open)}><Bell size={17}/><i/></button></div><button className="icon-button notification desktop-notification" aria-label="Notifications" onClick={()=>setNotificationsOpen(true)}><Bell size={16}/><i/></button><ThemeToggle theme={theme} onToggle={toggleTheme}/><span className="desktop-account-logo"><span className="avatar-logo"><img src="/hadalink-mark.png" alt=""/></span></span><div className={`account-menu ${accountMenuOpen?'open':''}`}><button className="account-trigger" aria-label="Account menu" aria-expanded={accountMenuOpen} onClick={()=>setAccountMenuOpen(open=>!open)}><span className="avatar-logo"><img src="/hadalink-mark.png" alt=""/></span><ChevronDown size={14}/></button>{accountMenuOpen&&<button className="account-modal-backdrop" aria-label="Dismiss account menu" onClick={event=>closePopup(setAccountMenuOpen,event)}><span className="account-dropdown" onClick={event=>event.stopPropagation()}><span>{isFarmer?'Farmer account':'Musa Ibrahim'}</span><span className="account-theme-toggle" onClick={()=>toggleTheme()}>{theme==='dark'?<Sun size={15}/>:<Moon size={15}/>}Switch to {theme==='dark'?'light':'dark'} mode</span><span role="button" tabIndex={0} onClick={()=>{setAccountMenuOpen(false);logout()}}><LogOut size={15}/>Log out</span></span></button>}</div></header>
     <div className="mobile-quick-nav" aria-label="Quick navigation">{quickNavItems.map(({id,icon:Icon})=><button key={id} className={`mobile-quick-nav-item ${page===id?'active':''}`} onClick={()=>go(id)}><Icon size={16}/><span>{id}</span></button>)}</div>{!isFarmer&&mobileMoreOpen&&<><button className="floating-more-backdrop" aria-label="Close more navigation" onClick={event=>closePopup(setMobileMoreOpen,event)}/><nav className="floating-more-menu" aria-label="More provider pages">{providerMoreNav.map(({id,icon:Icon})=><button key={id} className={page===id?'active':''} onClick={()=>go(id)}><Icon size={16}/><span>{id}</span></button>)}</nav></>}<nav className={`floating-nav ${!isFarmer?'provider-floating-nav':''}`} aria-label="Main navigation">{(isFarmer?mobileQuickNav:providerQuickNav).map(({id,icon:Icon})=><button key={id} aria-label={id} title={id} className={`floating-nav-item ${page===id?'active':''}`} onClick={()=>go(id)}><Icon size={18}/><span>{id==='My Machinery'?'Machines':id}</span></button>)}{!isFarmer&&<button aria-label="More navigation" title="More" className={`floating-nav-item floating-more-trigger ${mobileMoreOpen||providerMoreNav.some(item=>item.id===page)?'active':''}`} aria-expanded={mobileMoreOpen} onClick={()=>setMobileMoreOpen(open=>!open)}><Menu size={18}/><span>More</span></button>}</nav>
     <main className="workspace"><div className="page-heading"><div><div className="eyebrow">{isFarmer ? 'FARMER WORKSPACE · PLATEAU STATE' : <><span/> {page==='Dashboard'?'PLATEAU CENTRAL HUB · JOS':page==='Add Machinery'?'LISTING MANAGEMENT · MUSA IBRAHIM':page==='Settings'?'PROVIDER ADMINISTRATION · ID: HDL-8821-JS':`PROVIDER WORKSPACE · PLATEAU STATE`}</>}</div><h1>{current}</h1><p>{isFarmer && page === 'Dashboard' ? 'Browse equipment listed by local providers and choose what your farm needs.' : ({Dashboard:'Here’s an overview of your machinery and farm bookings.', 'My Machinery':'Manage, update, and track equipment across Plateau State.', 'Add Machinery':'List equipment and mechanization services for farmers to discover and request.',Requests:'Review rental requests and coordinate your next dispatch.',Calendar:'See your bookings, machinery availability, and field schedule.',Earnings:'Review completed bookings and indicative commission records.',Reviews:'Review feedback linked to completed bookings.',Settings:'Manage your profile, operating areas, and settlement preferences.',Analytics:'Understand fleet activity and rental growth separately from payouts.','Edit Machinery':'Update the details for this equipment listing.'}[page])}</p></div><div className="heading-actions">{!isFarmer&&page==='Dashboard'&&<span className="available-pill"><span/> Fleet online</span>}{!isFarmer&&page==='My Machinery'&&<span className="available-pill"><span/> 4 machines online</span>}{!isFarmer&&page==='My Machinery'&&<button className="button button-primary" onClick={()=>go('Add Machinery')}><Plus size={15}/> Add machinery</button>}{!isFarmer&&page==='Dashboard'&&<button className="button button-primary" onClick={()=>go('Add Machinery')}><Plus size={15}/> Add machinery</button>}{!isFarmer&&page==='Add Machinery'&&<button className="button button-ghost" onClick={()=>go('My Machinery')}><ArrowLeft size={15}/> Back to My Machinery</button>}{!isFarmer&&page==='Earnings'&&<button className="button button-ghost" onClick={()=>flash('Your statement is ready to download.')}><Download size={15}/> Download statement</button>}</div></div>
     {notice&&<div className="toast"><CheckCircle2 size={17}/>{notice}<button aria-label="Dismiss" onClick={()=>setNotice('')}><X size={15}/></button></div>}
     {notificationsOpen&&createPortal(<div className="notification-backdrop" role="presentation" onClick={event=>closePopup(setNotificationsOpen,event)}><section className="notification-popup" role="dialog" aria-modal="true" aria-labelledby="notification-title" onClick={event=>event.stopPropagation()}><header><strong id="notification-title">Notifications</strong><button type="button" aria-label="Close notifications" onClick={event=>closePopup(setNotificationsOpen,event)}><X size={17}/></button></header><span className="notification-empty-icon"><Bell size={20}/></span><p>You’re all caught up.</p><small>New booking updates will appear here.</small></section></div>,document.body)}
-    {logoutConfirmOpen&&createPortal(<div className="logout-confirm-backdrop" role="presentation" onClick={event=>closePopup(setLogoutConfirmOpen,event)}><section className="logout-confirm" role="alertdialog" aria-modal="true" aria-labelledby="logout-confirm-title" onClick={event=>event.stopPropagation()}><header><span className="logout-confirm-icon"><LogOut size={18}/></span><button aria-label="Close logout confirmation" onClick={event=>closePopup(setLogoutConfirmOpen,event)}><X size={17}/></button></header><h2 id="logout-confirm-title">Are you sure you want to log out?</h2><p>You’ll need to sign in again to access your workspace.</p><div className="logout-confirm-actions"><button className="button button-ghost" onClick={event=>closePopup(setLogoutConfirmOpen,event)}>Cancel</button><button className="logout-confirm-action" onClick={event=>closePopup(setLogoutConfirmOpen,event,()=>go('login'))}>Yes, I’m sure, log out</button></div></section></div>,document.body)}
+    {logoutConfirmOpen&&createPortal(<div className="logout-confirm-backdrop" role="presentation" onClick={event=>closePopup(setLogoutConfirmOpen,event)}><section className="logout-confirm" role="alertdialog" aria-modal="true" aria-labelledby="logout-confirm-title" onClick={event=>event.stopPropagation()}><header><span className="logout-confirm-icon"><LogOut size={18}/></span><button aria-label="Close logout confirmation" onClick={event=>closePopup(setLogoutConfirmOpen,event)}><X size={17}/></button></header><h2 id="logout-confirm-title">Are you sure you want to log out?</h2><p>You’ll need to sign in again to access your workspace.</p><div className="logout-confirm-actions"><button className="button button-ghost" onClick={event=>closePopup(setLogoutConfirmOpen,event)}>Cancel</button><button className="logout-confirm-action" onClick={event=>closePopup(setLogoutConfirmOpen,event,()=>logout())}>Yes, I’m sure, log out</button></div></section></div>,document.body)}
     {page==='Dashboard'&&(isFarmer ? <FarmerDashboard machinesState={machinesState} requestsState={requestsState} setRequestsState={setRequestsState}/> : <Dashboard go={go} machinesState={machinesState} requestsState={requestsState} flash={flash}/ >)}
     {page==='My Machinery'&&<Machinery machinesState={machinesState} setMachinesState={setMachinesState} filter={filter} setFilter={setFilter} search={search} setSearch={setSearch} go={go} flash={flash}/>}
     {page==='Add Machinery'&&<AddMachine flash={flash} go={go} setMachinesState={setMachinesState}/>}{page==='Edit Machinery'&&<EditMachine machine={editingMachine||machinesState[0]} setMachinesState={setMachinesState} go={go} flash={flash}/>}
@@ -251,20 +296,141 @@ function AuthPage({ page, go, initialRole = 'Farmer', theme, toggleTheme }) {
   const [role, setRole] = useState(initialRole);
   const [show, setShow] = useState(false);
   const [email, setEmail] = useState('');
-  const [sent, setSent] = useState(false);
+  const [name, setName] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [code, setCode] = useState('');
+  const [stage, setStage] = useState('details');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const googleButtonRef = React.useRef(null);
+  const googleCallbackRef = React.useRef(null);
   const register = page === 'register';
   const forgot = page === 'forgot';
-  const submitAccount = event => {
+  const verificationStage = register && stage === 'verify';
+  const resetStage = forgot && stage === 'reset';
+  const title = register ? verificationStage ? 'Check your email' : 'Create account' : forgot ? resetStage ? 'Choose a new password' : 'Reset password' : 'Welcome back';
+  const description = register
+    ? verificationStage ? `Enter the six-digit code we sent to ${email}.` : 'Join HadaLink to find or share farm equipment.'
+    : forgot ? resetStage ? `Enter the code sent to ${email} and choose a new password.` : 'Enter your email and we’ll send a reset code.'
+      : 'Log in to your account.';
+
+  const completeSignIn = () => go('Dashboard', register ? role : initialRole);
+
+  async function submitAccount(event) {
     event.preventDefault();
-    if (forgot) {
-      setSent(true);
+    setBusy(true);
+    setError('');
+    try {
+      if (register && !verificationStage) {
+        if (password !== confirmPassword) throw new Error('Your passwords do not match.');
+        await authRequest('/auth/register', { name, email, password, role: role.toLowerCase() });
+        setStage('verify');
+      } else if (verificationStage) {
+        await authRequest('/auth/verify-email', { email, code });
+        completeSignIn();
+      } else if (forgot && !resetStage) {
+        await authRequest('/auth/forgot-password', { email });
+        setStage('reset');
+      } else if (resetStage) {
+        await authRequest('/auth/reset-password', { email, code, password });
+        go('login');
+      } else {
+        await authRequest('/auth/login', { email, password });
+        completeSignIn();
+      }
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function continueWithGoogle(credential) {
+    if (!credential) {
+      setError(import.meta.env.VITE_GOOGLE_CLIENT_ID ? 'Google sign-in did not return a credential.' : 'Google sign-in is not configured yet.');
       return;
     }
-    go('Dashboard', register ? role : initialRole);
-  };
-  const continueWithGoogle = () => go('Dashboard', register ? role : initialRole);
+    setBusy(true);
+    setError('');
+    try {
+      await authRequest('/auth/google', { credential, role: role.toLowerCase() });
+      completeSignIn();
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
-  return <main className={`auth-layout ${register ? 'auth-register' : ''}`}><section className="auth-form-side"><header className="auth-header"><button className="auth-back" aria-label="Back to home" onClick={() => go('landing')}><ArrowLeft size={17} /></button><button className="brand" onClick={() => go('landing')}><span className="brand-icon"><img src="/hadalink-mark.png" alt="" /></span><span className="brand-text">Hada<span>Link</span><small>AGRI-RENTALS</small></span></button><ThemeToggle theme={theme} onToggle={toggleTheme}/></header><div className="auth-content"><h1>{register ? 'Create account' : forgot ? (sent ? 'Check your inbox' : 'Forgot password') : 'Welcome back'}</h1>{!register&&<p className="auth-description">{forgot ? sent ? `If ${email || 'your email'} belongs to an account, we’ve sent a reset code.` : 'Enter your email and we’ll send you a code to reset your password.' : 'Log in to your account.'}</p>}{!forgot && register && <div className="role-picker">{['Farmer', 'Provider'].map((r) => <button key={r} type="button" className={`role-option ${role === r ? 'selected' : ''}`} aria-pressed={role === r} onClick={() => setRole(r)}><span className="role-icon">{r === 'Farmer' ? <Tractor size={17} /> : <Wrench size={17} />}</span><span><strong>{r}</strong></span>{role === r && <CheckCircle2 size={16} />}</button>)}</div>}<form className="auth-fields" onSubmit={submitAccount}>{register && <Field icon={User} label="FULL NAME" placeholder="Enter your full name" required />}<Field icon={Mail} label="EMAIL ADDRESS" type="email" placeholder={page === 'login' ? 'you@example.com' : 'Enter your email'} value={email} onChange={e => setEmail(e.target.value)} required={!sent} />{!forgot && <Field icon={LockKeyhole} label="PASSWORD" type={show ? 'text' : 'password'} placeholder="Enter your password" required trailing={<button type="button" aria-label="Show password" onClick={() => setShow(!show)}>{show ? <EyeOff size={16} /> : <Eye size={16} />}</button>} />}{register && <Field icon={LockKeyhole} label="CONFIRM PASSWORD" type="password" placeholder="Confirm your password" required />}{page === 'login' && <div className="auth-options"><label className="remember"><input type="checkbox" /> Remember me</label><button type="button" className="text-link" onClick={() => go('forgot')}>Forgot password?</button></div>}<button className={`button ${page === 'login' ? 'button-harvest' : 'button-auth'} auth-submit`} type="submit">{forgot ? sent ? 'Resend reset code' : 'Send reset code' : register ? 'Create account' : 'Log in'} <ArrowRight size={17} /></button>{!forgot && <><div className="auth-divider"><span />{register ? 'OR' : 'OR'}<span /></div><div className="social-row"><button type="button" onClick={continueWithGoogle}><span className="google-mark">G</span> Continue with Google</button></div></>}</form>{forgot && <div className="reset-note"><ShieldCheck size={17} /><span>We’ll send a secure one-time code to the email associated with your account.</span></div>}</div><footer className="auth-footer">{register ? <>Have an account? <button className="text-link" onClick={() => go('login')}>Log in</button></> : forgot ? <>Remember your password? <button className="text-link" onClick={() => go('login')}>Log in</button></> : <>New to HadaLink? <button className="text-link" onClick={() => go('register')}>Create account <ArrowRight size={13} /></button></>}</footer></section><aside className="auth-image-side"><img src="https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1200&q=85" alt="Farmland in Plateau State" /><div className="auth-image-overlay" /><article className="auth-quote"><Leaf size={19} /><h2>“The right machine, right when you need it.”</h2><p>Reliable tractors and farm equipment, connected locally.</p></article></aside></main>;
+  googleCallbackRef.current = continueWithGoogle;
+  React.useEffect(() => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!clientId || !googleButtonRef.current) return undefined;
+
+    let cancelled = false;
+    const mountGoogleButton = () => {
+      if (cancelled || !window.google?.accounts?.id || !googleButtonRef.current) return;
+      googleButtonRef.current.replaceChildren();
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        callback: response => googleCallbackRef.current?.(response.credential),
+      });
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        theme: theme === 'dark' ? 'filled_black' : 'outline',
+        size: 'large',
+        text: 'continue_with',
+        shape: 'pill',
+        width: Math.min(360, Math.max(240, googleButtonRef.current.clientWidth)),
+      });
+    };
+
+    if (window.google?.accounts?.id) {
+      mountGoogleButton();
+    } else {
+      let script = document.querySelector('script[data-google-identity]');
+      if (!script) {
+        script = document.createElement('script');
+        script.src = 'https://accounts.google.com/gsi/client';
+        script.async = true;
+        script.defer = true;
+        script.dataset.googleIdentity = 'true';
+        document.head.appendChild(script);
+      }
+      script.addEventListener('load', mountGoogleButton);
+    }
+
+    return () => {
+      cancelled = true;
+      document.querySelector('script[data-google-identity]')?.removeEventListener('load', mountGoogleButton);
+    };
+  }, [theme, role]);
+
+  async function resendCode() {
+    setBusy(true);
+    setError('');
+    try {
+      if (register) await authRequest('/auth/register', { name, email, password, role: role.toLowerCase() });
+      else await authRequest('/auth/forgot-password', { email });
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <main className={`auth-layout ${register ? 'auth-register' : ''}`}><section className="auth-form-side"><header className="auth-header"><button className="auth-back" aria-label="Back to home" onClick={() => go('landing')}><ArrowLeft size={17} /></button><button className="brand" onClick={() => go('landing')}><span className="brand-icon"><img src="/hadalink-mark.png" alt="" /></span><span className="brand-text">Hada<span>Link</span><small>AGRI-RENTALS</small></span></button><ThemeToggle theme={theme} onToggle={toggleTheme}/></header><div className="auth-content"><h1>{title}</h1><p className="auth-description">{description}</p>{register && !verificationStage && <div className="role-picker">{['Farmer', 'Provider'].map((r) => <button key={r} type="button" className={`role-option ${role === r ? 'selected' : ''}`} aria-pressed={role === r} onClick={() => setRole(r)}><span className="role-icon">{r === 'Farmer' ? <Tractor size={17} /> : <Wrench size={17} />}</span><span><strong>{r}</strong></span>{role === r && <CheckCircle2 size={16} />}</button>)}</div>}<form className="auth-fields" onSubmit={submitAccount}>
+    {register && !verificationStage && <Field icon={User} label="FULL NAME" placeholder="Enter your full name" value={name} onChange={event => setName(event.target.value)} required />}
+    {(!verificationStage && !resetStage) && <Field icon={Mail} label="EMAIL ADDRESS" type="email" placeholder={page === 'login' ? 'you@example.com' : 'Enter your email'} value={email} onChange={event => setEmail(event.target.value)} required />}
+    {(verificationStage || resetStage) && <Field icon={ShieldCheck} label="EMAIL CODE" inputMode="numeric" autoComplete="one-time-code" placeholder="Enter the 6-digit code" value={code} onChange={event => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))} required />}
+    {(!forgot && !verificationStage || resetStage) && <Field icon={LockKeyhole} label={resetStage ? 'NEW PASSWORD' : 'PASSWORD'} type={show ? 'text' : 'password'} placeholder={resetStage ? 'Choose a new password' : 'Enter your password'} value={password} onChange={event => setPassword(event.target.value)} required minLength={8} trailing={!resetStage && <button type="button" aria-label={show ? 'Hide password' : 'Show password'} onClick={() => setShow(value => !value)}>{show ? <EyeOff size={16} /> : <Eye size={16} />}</button>} />}
+    {register && !verificationStage && <Field icon={LockKeyhole} label="CONFIRM PASSWORD" type="password" placeholder="Confirm your password" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} required minLength={8} />}
+    {page === 'login' && <div className="auth-options"><label className="remember"><input type="checkbox" /> Remember me</label><button type="button" className="text-link" onClick={() => { setStage('email'); setError(''); go('forgot'); }}>Forgot password?</button></div>}
+    {error && <div className="auth-error" role="alert">{error}</div>}
+    <button className={`button ${page === 'login' ? 'button-harvest' : 'button-auth'} auth-submit`} type="submit" disabled={busy}>{busy ? 'Please wait…' : verificationStage ? 'Verify email' : resetStage ? 'Update password' : forgot ? 'Send reset code' : register ? 'Create account' : 'Log in'} {!busy && <ArrowRight size={17} />}</button>
+    {(verificationStage || resetStage) && <button type="button" className="text-link auth-resend" onClick={resendCode} disabled={busy}>{busy ? 'Sending…' : 'Send a new code'}</button>}
+    {!forgot && !verificationStage && <><div className="auth-divider"><span />OR<span /></div><div className="social-row">{import.meta.env.VITE_GOOGLE_CLIENT_ID ? <div className="google-button-slot" ref={googleButtonRef} /> : <button className="google-fallback" type="button" onClick={() => setError('Google sign-in is not configured yet.')}><span className="google-mark">G</span> Continue with Google</button>}</div></>}
+  </form>{forgot && <div className="reset-note"><ShieldCheck size={17} /><span>We’ll send a secure one-time code to the email associated with your account.</span></div>}</div><footer className="auth-footer">{register ? <>Have an account? <button className="text-link" onClick={() => go('login')}>Log in</button></> : forgot ? <>Remember your password? <button className="text-link" onClick={() => go('login')}>Log in</button></> : <>New to HadaLink? <button className="text-link" onClick={() => go('register')}>Create account <ArrowRight size={13} /></button></>}</footer></section><aside className="auth-image-side"><img src="https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1200&q=85" alt="Farmland in Plateau State" /><div className="auth-image-overlay" /><article className="auth-quote"><Leaf size={19} /><h2>“The right machine, right when you need it.”</h2><p>Reliable tractors and farm equipment, connected locally.</p></article></aside></main>;
 }
 function Field({ icon: Icon, label, trailing, ...props }) { return <label className="field"><span className="field-label">{label}</span><span className="field-control"><Icon size={17} /><input {...props} />{trailing}</span></label> }
 

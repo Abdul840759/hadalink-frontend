@@ -36,4 +36,4 @@ npm run dev
 
 The API listens on port `4000` by default. Check that it is running at [http://localhost:4000/api/health](http://localhost:4000/api/health).
 
-The backend currently provides only its service health endpoint. Database storage, authentication, and marketplace APIs can be added as their requirements are agreed.
+Set `MONGODB_URI` in `backend/.env` to connect an Atlas cluster. The API includes MongoDB models for users, equipment, booking requests, email codes, and sessions; public equipment browse/detail endpoints; and authentication endpoints for password login, email verification, password reset, Google sign-in, and logout. Set `SESSION_SECRET`, `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, and `GOOGLE_CLIENT_ID` in `backend/.env`; set `VITE_GOOGLE_CLIENT_ID` in `frontend/.env` for the Google button. The frontend dashboard still uses demo data; provider listing management, booking mutations, Cloudinary uploads, and replacing demo data with API responses are the next steps.

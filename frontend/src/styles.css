@@ -1379,3 +1379,10 @@ button,.button,input,select,textarea{line-height:1.4}
 .auth-content h1,.about-hero-copy h1{line-height:1.16;letter-spacing:-.02em}
 .field-label,.eyebrow{line-height:1.6;letter-spacing:.08em}
 .panel,.machine-body,.review-card,.request-card{line-height:1.65}
+/* Authentication API feedback and Google Identity button. */
+.auth-error{padding:10px 12px;border:1px solid rgba(203,78,65,.42);border-radius:10px;background:rgba(203,78,65,.1);color:#ffb8ae;font-size:12px;line-height:1.5}
+.auth-resend{justify-self:center;min-height:30px}
+.google-button-slot{width:100%;min-height:42px;display:flex;justify-content:center;overflow:hidden}
+.google-fallback{width:100%;min-height:42px;border:1px solid var(--line2);border-radius:10px;background:transparent;color:inherit}
+.google-fallback:hover{background:var(--card2)}
+[data-theme="light"] .auth-error{background:#fff1ef;color:#9e3026;border-color:#e9aaa3}
