@@ -33,13 +33,16 @@ app.use((_request, response) => {
   response.status(404).json({ error: 'Route not found' });
 });
 
-app.use((error, _request, response, _next) => {
-  console.error(error.name || 'Error', error.status || 500);
+app.use((error, request, response, _next) => {
+  const disallowedOrigin = error.message === 'This origin is not allowed by the API.';
+  const status = disallowedOrigin ? 403 : error.status || 500;
+  console.error(`[api] ${request.method} ${request.path} -> ${status}: ${error.message || error.name || 'Unknown error'}`);
+  if (status >= 500 && error.stack) console.error(error.stack);
   if (error.name === 'ValidationError' || error.name === 'CastError' || error.type === 'entity.parse.failed') {
     return response.status(400).json({ error: 'The request contains invalid data.' });
   }
   if (error.code === 11000) return response.status(409).json({ error: 'A record with those details already exists.' });
-  if (error.message === 'This origin is not allowed by the API.') {
+  if (disallowedOrigin) {
     return response.status(403).json({ error: 'This origin is not allowed by the API.' });
   }
   return response.status(error.status || 500).json({ error: error.status && error.status < 500 ? error.message : 'An unexpected server error occurred' });
