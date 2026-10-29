@@ -1,25 +1,36 @@
-# HadaLink Frontend
+# HadaLink
 
-HadaLink is a marketplace concept for connecting farmers in Plateau State with nearby agricultural equipment providers. This repository contains the React frontend, including the public landing page and farmer and provider workspace screens.
+HadaLink connects farmers in Plateau State with nearby agricultural equipment providers. The repository is organized as a small monorepo with separate frontend and backend applications.
 
-The interface is designed for phones, tablets, and desktop screens. It includes equipment listings and filters, booking request flows, provider tools, profile settings, and light and dark themes. This version is a frontend prototype; booking and account flows use local demo state and are not connected to a production service.
+```text
+frontend/   React + Vite marketplace interface
+backend/    Express API starter
+```
 
-## Run locally
-
-You’ll need Node.js and npm installed.
+## Frontend
 
 ```sh
+cd frontend
 npm install
 npm run dev
 ```
 
-Vite prints the local development URL in the terminal.
-
-## Production build
+To create and preview a production build:
 
 ```sh
 npm run build
 npm run preview
 ```
 
-The production files are written to `dist/`.
+## Backend
+
+```sh
+cd backend
+npm install
+cp .env.example .env
+npm run dev
+```
+
+The API listens on port `4000` by default. Check that it is running at [http://localhost:4000/api/health](http://localhost:4000/api/health).
+
+The backend currently provides only its service health endpoint. Database storage, authentication, and marketplace APIs can be added as their requirements are agreed.
