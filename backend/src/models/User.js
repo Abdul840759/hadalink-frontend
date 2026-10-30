@@ -14,6 +14,7 @@ const userSchema = new mongoose.Schema({
   identities: { type: [authIdentitySchema], default: [] },
   profile: {
     phone: { type: String, trim: true, maxlength: 32 },
+    phoneVerified: { type: Boolean, default: false },
     businessName: { type: String, trim: true, maxlength: 140 },
     primaryArea: { type: String, trim: true, maxlength: 120 },
     serviceAreas: { type: [String], default: [] },

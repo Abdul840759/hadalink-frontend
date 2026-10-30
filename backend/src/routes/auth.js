@@ -180,6 +180,7 @@ router.post('/google', authLimiter, async (request, response) => {
 
   const email = normalizeEmail(payload.email);
   let user = await User.findOne({ 'identities.provider': 'google', 'identities.subject': payload.sub });
+  let created = false;
   if (!user) {
     user = await User.findOne({ email });
     if (user) {
@@ -197,12 +198,13 @@ router.post('/google', authLimiter, async (request, response) => {
         identities: [{ provider: 'google', subject: payload.sub }],
         profile: { avatarUrl: payload.picture },
       });
+      created = true;
     }
   }
   if (user.status !== 'active') return response.status(403).json({ error: 'This account is not available to sign in.' });
 
   await createSession(user, response);
-  return response.json({ data: { user: publicUser(user) } });
+  return response.json({ data: { user: publicUser(user), created } });
 });
 
 router.get('/me', requireAuth, (request, response) => response.json({ data: { user: publicUser(request.user) } }));
