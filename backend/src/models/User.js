@@ -15,6 +15,8 @@ const userSchema = new mongoose.Schema({
   profile: {
     phone: { type: String, trim: true, maxlength: 32 },
     phoneVerified: { type: Boolean, default: false },
+    whatsapp: { type: String, trim: true, maxlength: 32 },
+    whatsappVerified: { type: Boolean, default: false },
     businessName: { type: String, trim: true, maxlength: 140 },
     primaryArea: { type: String, trim: true, maxlength: 120 },
     serviceAreas: { type: [String], default: [] },

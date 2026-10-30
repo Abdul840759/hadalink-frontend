@@ -208,6 +208,32 @@ router.post('/google', authLimiter, async (request, response) => {
 });
 
 router.get('/me', requireAuth, (request, response) => response.json({ data: { user: publicUser(request.user) } }));
+router.patch('/profile', requireAuth, async (request, response) => {
+  const allowedFields = ['phone', 'whatsapp', 'businessName', 'primaryArea'];
+  const updates = Object.fromEntries(allowedFields
+    .filter(field => Object.hasOwn(request.body || {}, field))
+    .map(field => [field, String(request.body[field] || '').trim()]));
+  if (!Object.keys(updates).length) return response.status(400).json({ error: 'Add at least one profile detail.' });
+  const maxLengths = { phone: 32, whatsapp: 32, businessName: 140, primaryArea: 120 };
+  if (Object.entries(updates).some(([field, value]) => value.length > maxLengths[field])) return response.status(400).json({ error: 'One or more profile details are too long.' });
+  for (const field of ['phone', 'whatsapp']) {
+    if (Object.hasOwn(updates, field) && (updates[field].length < 7 || !/^[+\d()\s.-]+$/.test(updates[field]))) {
+      return response.status(400).json({ error: `Enter a valid ${field === 'phone' ? 'phone' : 'WhatsApp'} number.` });
+    }
+  }
+  for (const field of ['businessName', 'primaryArea']) {
+    if (Object.hasOwn(updates, field) && updates[field].length < 2) {
+      return response.status(400).json({ error: `Enter your ${field === 'businessName' ? 'business or fleet name' : 'operating area'}.` });
+    }
+  }
+  for (const [field, value] of Object.entries(updates)) {
+    request.user.profile[field] = value;
+    if (field === 'phone') request.user.profile.phoneVerified = false;
+    if (field === 'whatsapp') request.user.profile.whatsappVerified = false;
+  }
+  await request.user.save();
+  return response.json({ data: { user: publicUser(request.user) } });
+});
 router.post('/logout', requireAuth, async (request, response) => {
   await destroySession(request, response);
   return response.status(204).end();

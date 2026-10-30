@@ -23,11 +23,11 @@ const requests = [
 ];
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
 
-async function authRequest(path, body) {
+async function authRequest(path, body, method = 'POST') {
   let response;
   try {
     response = await fetch(`${API_BASE}${path}`, {
-      method: 'POST',
+      method,
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -46,6 +46,28 @@ async function authRequest(path, body) {
   }
   return payload;
 }
+
+function requiredProfileSteps(user) {
+  const profile = user?.profile || {};
+  const steps = [
+    { field: 'phone', label: 'Phone number', title: 'What phone number can we reach you on?', description: 'We use this to coordinate bookings and important account updates.', placeholder: '+234 800 000 0000', icon: MapPin, type: 'tel' },
+    { field: 'whatsapp', label: 'WhatsApp number', title: 'What number do you use on WhatsApp?', description: 'This helps farmers and providers coordinate locally.', placeholder: '+234 800 000 0000', icon: MessageCircle, type: 'tel' },
+  ];
+  if (user?.role === 'provider') steps.push({ field: 'businessName', label: 'Business or fleet name', title: 'What should farmers call your business?', description: 'Use your business name or the name of your equipment fleet.', placeholder: 'Business or fleet name', icon: Wrench, type: 'text' });
+  steps.push({ field: 'primaryArea', label: user?.role === 'provider' ? 'Primary depot or operating area' : 'Farm location', title: user?.role === 'provider' ? 'Where is your main depot?' : 'Where is your farm located?', description: 'Share the Plateau area you operate in so we can show relevant local information.', placeholder: 'Town, district or LGA', icon: MapPin, type: 'text' });
+  return steps.filter(step => !String(profile[step.field] || '').trim());
+}
+
+function verificationNotices(user) {
+  if (!user) return [];
+  const profile = user.profile || {};
+  return [
+    user.emailVerified !== true && { title: 'Email address needs verification', detail: 'Your account email is not marked as verified.' },
+    profile.phoneVerified !== true && { title: 'Phone number needs verification', detail: profile.phone ? `${profile.phone} has not been verified yet.` : 'Phone number has not been added yet.' },
+    profile.whatsappVerified !== true && { title: 'WhatsApp number needs verification', detail: profile.whatsapp ? `${profile.whatsapp} has not been verified yet.` : 'WhatsApp number has not been added yet.' },
+  ].filter(Boolean);
+}
+
 const navItems = [
   { id: 'Dashboard', icon: Home }, { id: 'My Machinery', icon: Tractor }, { id: 'Add Machinery', icon: Plus }, { id: 'Requests', icon: MessageCircle }, { id: 'Calendar', icon: CalendarDays }, { id: 'Analytics', icon: Gauge }, { id: 'Earnings', icon: Wallet }, { id: 'Reviews', icon: Star }, { id: 'Settings', icon: Settings },
 ];
@@ -137,6 +159,7 @@ function App() {
   const [requestsState, setRequestsState] = useState(() => readStoredArray('hadalink-requests', requests));
   const [editingMachine, setEditingMachine] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
+  const [onboardingRequired, setOnboardingRequired] = useState(null);
   const [signupRole, setSignupRole] = useState(() => localStorage.getItem('hadalink-role') === 'Provider' ? 'Provider' : 'Farmer');
   const [theme, setTheme] = useState(() => localStorage.getItem('hadalink-theme') || 'dark');
   const isFarmer = signupRole === 'Farmer';
@@ -154,16 +177,14 @@ function App() {
       .then(({ data }) => {
         if (!active || !data?.user) return;
         setCurrentUser(data.user);
-        if (localStorage.getItem('hadalink-phone-reminder-pending') === '1') {
-          localStorage.removeItem('hadalink-phone-reminder-pending');
-          setNotificationsOpen(true);
-        }
+        setOnboardingRequired(requiredProfileSteps(data.user).length > 0);
         const role = data.user.role === 'provider' ? 'Provider' : 'Farmer';
         localStorage.setItem('hadalink-role', role);
         setSignupRole(role);
       })
       .catch(() => {
         if (!active) return;
+        setOnboardingRequired(false);
         history.replaceState({ page: 'login' }, '', '/login');
         setPage('login');
       });
@@ -214,6 +235,7 @@ function App() {
   const accountName = currentUser?.name?.trim() || (isFarmer ? 'Farmer account' : 'Provider account');
   const accountInitials = accountName.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase();
   const accountAvatar = currentUser?.profile?.avatarUrl;
+  const pendingVerificationNotices = verificationNotices(currentUser);
   const userLink=(p,label)=> <button className="text-link" onClick={()=>go(p)}>{label}</button>;
   React.useEffect(() => {
     if (!notificationsOpen) return undefined;
@@ -224,12 +246,14 @@ function App() {
   if (['login','register','forgot'].includes(page)) return <AuthPage page={page} go={go} initialRole={signupRole} theme={theme} toggleTheme={toggleTheme}/>;
   if(page==='landing') return <Landing go={go} theme={theme} toggleTheme={toggleTheme}/>
   if(page==='About') return <AboutPage go={go} theme={theme} toggleTheme={toggleTheme}/>
+  if (onboardingRequired === null) return <main className="profile-onboarding-loading" aria-live="polite"><span className="brand-icon"><img src="/hadalink-mark.png" alt="" /></span><p>Loading your workspace…</p></main>;
+  if (onboardingRequired) return <ProfileOnboarding user={currentUser} onUserUpdated={setCurrentUser} onComplete={user => { setCurrentUser(user); setOnboardingRequired(false); setNotificationsOpen(verificationNotices(user).length > 0); go('Dashboard'); }} onLogout={logout}/>;
   const current = isFarmer && page === 'Dashboard' ? 'Find machinery for your farm' : titles[page] || titles.Dashboard;
-  return <div className="portal"><aside className={`sidebar ${mobileNav?'sidebar-open':''}`}><button className="brand" onClick={()=>go('Dashboard')}><span className="brand-icon"><img src="/hadalink-mark.png" alt="" /></span><span className="brand-text">Hada<span>Link</span><small>AGRI-RENTALS</small></span></button><span className="sidebar-caption">{isFarmer ? 'FARMER WORKSPACE' : 'PROVIDER WORKSPACE'}</span><nav className="side-nav">{(isFarmer ? navItems.slice(0, 1) : navItems).map(({id,icon:Icon})=><button key={id} onClick={()=>go(id)} className={`nav-item ${page===id?'active':''}`}><Icon size={17}/><span>{id==='Dashboard'?'Dashboard':id}</span>{id==='Requests'&&<span className="nav-count">3</span>}{id==='Add Machinery'&&<span className="nav-add"><Plus size={13}/></span>}</button>)}</nav><div className="sidebar-tools" aria-label="Quick settings"><button className="sidebar-tool" aria-label="Notifications" onClick={()=>setNotificationsOpen(true)}><Bell size={16}/><span>Notifications</span></button><button className="sidebar-tool" onClick={toggleTheme}><span className="sidebar-tool-icon">{theme==='dark'?<Sun size={16}/>:<Moon size={16}/>}</span><span>{theme==='dark'?'Light mode':'Dark mode'}</span></button></div><div className="side-help"><div className="help-icon"><CircleHelp size={17}/></div><strong>Need a hand?</strong><span>Our local team is here for you.</span></div><button className="logout" onClick={()=>setLogoutConfirmOpen(true)}><LogOut size={16}/> Log out</button></aside>{mobileNav&&<button aria-label="Close menu" className="mobile-backdrop" onClick={event=>closePopup(setMobileNav,event)}/>}     <div className="portal-main"><header className="topbar"><label className="global-search"><Search size={16}/><input aria-label="Search machinery and requests" placeholder="Search machinery or requests…" value={search} onChange={e=>setSearch(e.target.value)}/>{search&&<button aria-label="Clear search" onClick={()=>setSearch('')}><X size={14}/></button>}</label><div className="notification-wrap"><button className="icon-button notification" aria-label="Notifications" aria-expanded={notificationsOpen} onClick={()=>setNotificationsOpen(open => !open)}><Bell size={17}/><i/></button></div><button className="icon-button notification desktop-notification" aria-label="Notifications" onClick={()=>setNotificationsOpen(true)}><Bell size={16}/><i/></button><ThemeToggle theme={theme} onToggle={toggleTheme}/><div className={`account-menu ${accountMenuOpen?'open':''}`}><button className="account-trigger" aria-label={`Account menu for ${accountName}`} aria-expanded={accountMenuOpen} onClick={()=>setAccountMenuOpen(open=>!open)}><span className="account-name">{accountName}</span><span className="avatar-logo">{accountAvatar?<img src={accountAvatar} alt="" referrerPolicy="no-referrer"/>:<span className="avatar-initials">{accountInitials}</span>}</span><ChevronDown size={14}/></button>{accountMenuOpen&&<button className="account-modal-backdrop" aria-label="Dismiss account menu" onClick={event=>closePopup(setAccountMenuOpen,event)}><span className="account-dropdown" onClick={event=>event.stopPropagation()}><span className="account-dropdown-identity"><span className="avatar-logo">{accountAvatar?<img src={accountAvatar} alt="" referrerPolicy="no-referrer"/>:<span className="avatar-initials">{accountInitials}</span>}</span><span><strong>{accountName}</strong><small>{currentUser?.email || ''}</small></span></span><span className="account-theme-toggle" onClick={()=>toggleTheme()}>{theme==='dark'?<Sun size={15}/>:<Moon size={15}/>}Switch to {theme==='dark'?'light':'dark'} mode</span><span role="button" tabIndex={0} onClick={()=>{setAccountMenuOpen(false);logout()}}><LogOut size={15}/>Log out</span></span></button>}</div></header>
+  return <div className="portal"><aside className={`sidebar ${mobileNav?'sidebar-open':''}`}><button className="brand" onClick={()=>go('Dashboard')}><span className="brand-icon"><img src="/hadalink-mark.png" alt="" /></span><span className="brand-text">Hada<span>Link</span><small>AGRI-RENTALS</small></span></button><span className="sidebar-caption">{isFarmer ? 'FARMER WORKSPACE' : 'PROVIDER WORKSPACE'}</span><nav className="side-nav">{(isFarmer ? navItems.filter(({id}) => ['Dashboard','Requests','Analytics','Settings'].includes(id)) : navItems).map(({id,icon:Icon})=><button key={id} onClick={()=>go(id)} className={`nav-item ${page===id?'active':''}`}><Icon size={17}/><span>{id==='Dashboard'?'Dashboard':id}</span>{id==='Requests'&&<span className="nav-count">3</span>}{id==='Add Machinery'&&<span className="nav-add"><Plus size={13}/></span>}</button>)}</nav><div className="sidebar-tools" aria-label="Quick settings"><button className="sidebar-tool" aria-label="Notifications" onClick={()=>setNotificationsOpen(true)}><Bell size={16}/><span>Notifications</span></button><button className="sidebar-tool" onClick={toggleTheme}><span className="sidebar-tool-icon">{theme==='dark'?<Sun size={16}/>:<Moon size={16}/>}</span><span>{theme==='dark'?'Light mode':'Dark mode'}</span></button></div><div className="side-help"><div className="help-icon"><CircleHelp size={17}/></div><strong>Need a hand?</strong><span>Our local team is here for you.</span></div><button className="logout" onClick={()=>setLogoutConfirmOpen(true)}><LogOut size={16}/> Log out</button></aside>{mobileNav&&<button aria-label="Close menu" className="mobile-backdrop" onClick={event=>closePopup(setMobileNav,event)}/>}     <div className="portal-main"><header className="topbar"><label className="global-search"><Search size={16}/><input aria-label="Search machinery and requests" placeholder="Search machinery or requests…" value={search} onChange={e=>setSearch(e.target.value)}/>{search&&<button aria-label="Clear search" onClick={()=>setSearch('')}><X size={14}/></button>}</label><div className="notification-wrap"><button className="icon-button notification" aria-label={`Notifications${pendingVerificationNotices.length ? `, ${pendingVerificationNotices.length} items need attention` : ''}`} aria-expanded={notificationsOpen} onClick={()=>setNotificationsOpen(open => !open)}><Bell size={17}/>{pendingVerificationNotices.length > 0 && <i/>}</button></div><button className="icon-button notification desktop-notification" aria-label={`Notifications${pendingVerificationNotices.length ? `, ${pendingVerificationNotices.length} items need attention` : ''}`} onClick={()=>setNotificationsOpen(true)}><Bell size={16}/>{pendingVerificationNotices.length > 0 && <i/>}</button><ThemeToggle theme={theme} onToggle={toggleTheme}/><div className={`account-menu ${accountMenuOpen?'open':''}`}><button className="account-trigger" aria-label={`Account menu for ${accountName}`} aria-expanded={accountMenuOpen} onClick={()=>setAccountMenuOpen(open=>!open)}><span className="account-name">{accountName}</span><span className="avatar-logo">{accountAvatar?<img src={accountAvatar} alt="" referrerPolicy="no-referrer"/>:<span className="avatar-initials">{accountInitials}</span>}</span><ChevronDown size={14}/></button>{accountMenuOpen&&<button className="account-modal-backdrop" aria-label="Dismiss account menu" onClick={event=>closePopup(setAccountMenuOpen,event)}><span className="account-dropdown" onClick={event=>event.stopPropagation()}><span className="account-dropdown-identity"><span className="avatar-logo">{accountAvatar?<img src={accountAvatar} alt="" referrerPolicy="no-referrer"/>:<span className="avatar-initials">{accountInitials}</span>}</span><span><strong>{accountName}</strong><small>{currentUser?.email || ''}</small></span></span><span className="account-theme-toggle" onClick={()=>toggleTheme()}>{theme==='dark'?<Sun size={15}/>:<Moon size={15}/>}Switch to {theme==='dark'?'light':'dark'} mode</span><span role="button" tabIndex={0} onClick={()=>{setAccountMenuOpen(false);logout()}}><LogOut size={15}/>Log out</span></span></button>}</div></header>
     <div className="mobile-quick-nav" aria-label="Quick navigation">{quickNavItems.map(({id,icon:Icon})=><button key={id} className={`mobile-quick-nav-item ${page===id?'active':''}`} onClick={()=>go(id)}><Icon size={16}/><span>{id}</span></button>)}</div>{!isFarmer&&mobileMoreOpen&&<><button className="floating-more-backdrop" aria-label="Close more navigation" onClick={event=>closePopup(setMobileMoreOpen,event)}/><nav className="floating-more-menu" aria-label="More provider pages">{providerMoreNav.map(({id,icon:Icon})=><button key={id} className={page===id?'active':''} onClick={()=>go(id)}><Icon size={16}/><span>{id}</span></button>)}</nav></>}<nav className={`floating-nav ${!isFarmer?'provider-floating-nav':''}`} aria-label="Main navigation">{(isFarmer?mobileQuickNav:providerQuickNav).map(({id,icon:Icon})=><button key={id} aria-label={id} title={id} className={`floating-nav-item ${page===id?'active':''}`} onClick={()=>go(id)}><Icon size={18}/><span>{id==='My Machinery'?'Machines':id}</span></button>)}{!isFarmer&&<button aria-label="More navigation" title="More" className={`floating-nav-item floating-more-trigger ${mobileMoreOpen||providerMoreNav.some(item=>item.id===page)?'active':''}`} aria-expanded={mobileMoreOpen} onClick={()=>setMobileMoreOpen(open=>!open)}><Menu size={18}/><span>More</span></button>}</nav>
     <main className="workspace"><div className="page-heading"><div><div className="eyebrow">{isFarmer ? 'FARMER WORKSPACE · PLATEAU STATE' : <><span/> {page==='Dashboard'?'PLATEAU CENTRAL HUB · JOS':page==='Add Machinery'?'LISTING MANAGEMENT · MUSA IBRAHIM':page==='Settings'?'PROVIDER ADMINISTRATION · ID: HDL-8821-JS':`PROVIDER WORKSPACE · PLATEAU STATE`}</>}</div><h1>{current}</h1><p>{isFarmer && page === 'Dashboard' ? 'Browse equipment listed by local providers and choose what your farm needs.' : ({Dashboard:'Here’s an overview of your machinery and farm bookings.', 'My Machinery':'Manage, update, and track equipment across Plateau State.', 'Add Machinery':'List equipment and mechanization services for farmers to discover and request.',Requests:'Review rental requests and coordinate your next dispatch.',Calendar:'See your bookings, machinery availability, and field schedule.',Earnings:'Review completed bookings and indicative commission records.',Reviews:'Review feedback linked to completed bookings.',Settings:'Manage your profile, operating areas, and settlement preferences.',Analytics:'Understand fleet activity and rental growth separately from payouts.','Edit Machinery':'Update the details for this equipment listing.'}[page])}</p></div><div className="heading-actions">{!isFarmer&&page==='Dashboard'&&<span className="available-pill"><span/> Fleet online</span>}{!isFarmer&&page==='My Machinery'&&<span className="available-pill"><span/> 4 machines online</span>}{!isFarmer&&page==='My Machinery'&&<button className="button button-primary" onClick={()=>go('Add Machinery')}><Plus size={15}/> Add machinery</button>}{!isFarmer&&page==='Dashboard'&&<button className="button button-primary" onClick={()=>go('Add Machinery')}><Plus size={15}/> Add machinery</button>}{!isFarmer&&page==='Add Machinery'&&<button className="button button-ghost" onClick={()=>go('My Machinery')}><ArrowLeft size={15}/> Back to My Machinery</button>}{!isFarmer&&page==='Earnings'&&<button className="button button-ghost" onClick={()=>flash('Your statement is ready to download.')}><Download size={15}/> Download statement</button>}</div></div>
     {notice&&<div className="toast"><CheckCircle2 size={17}/>{notice}<button aria-label="Dismiss" onClick={()=>setNotice('')}><X size={15}/></button></div>}
-    {notificationsOpen&&createPortal(<div className="notification-backdrop" role="presentation" onClick={event=>closePopup(setNotificationsOpen,event)}><section className="notification-popup" role="dialog" aria-modal="true" aria-labelledby="notification-title" onClick={event=>event.stopPropagation()}><header><strong id="notification-title">Notifications</strong><button type="button" aria-label="Close notifications" onClick={event=>closePopup(setNotificationsOpen,event)}><X size={17}/></button></header>{currentUser?.profile?.phoneVerified!==true&&<><span className="notification-empty-icon"><ShieldCheck size={20}/></span><p>Phone number not verified</p><small>{currentUser?.profile?.phone ? 'Your phone number still needs verification.' : 'No phone number has been added yet. Add and verify one in your profile settings.'}</small></>}{currentUser?.profile?.phoneVerified===true&&<><span className="notification-empty-icon"><Bell size={20}/></span><p>You’re all caught up.</p><small>New booking updates will appear here.</small></>}</section></div>,document.body)}
+    {notificationsOpen&&createPortal(<div className="notification-backdrop" role="presentation" onClick={event=>closePopup(setNotificationsOpen,event)}><section className="notification-popup" role="dialog" aria-modal="true" aria-labelledby="notification-title" onClick={event=>event.stopPropagation()}><header><strong id="notification-title">Notifications</strong><button type="button" aria-label="Close notifications" onClick={event=>closePopup(setNotificationsOpen,event)}><X size={17}/></button></header>{pendingVerificationNotices.length ? <><p className="notification-intro">A few account details still need verification.</p><div className="verification-notice-list">{pendingVerificationNotices.map(item=><article className="verification-notice" key={item.title}><span><ShieldCheck size={17}/></span><div><strong>{item.title}</strong><small>{item.detail}</small></div></article>)}</div><small className="notification-footnote">These reminders will stay here until the details are verified.</small></> : <><span className="notification-empty-icon"><Bell size={20}/></span><p>You’re all caught up.</p><small>New account updates will appear here.</small></>}</section></div>,document.body)}
     {logoutConfirmOpen&&createPortal(<div className="logout-confirm-backdrop" role="presentation" onClick={event=>closePopup(setLogoutConfirmOpen,event)}><section className="logout-confirm" role="alertdialog" aria-modal="true" aria-labelledby="logout-confirm-title" onClick={event=>event.stopPropagation()}><header><span className="logout-confirm-icon"><LogOut size={18}/></span><button aria-label="Close logout confirmation" onClick={event=>closePopup(setLogoutConfirmOpen,event)}><X size={17}/></button></header><h2 id="logout-confirm-title">Are you sure you want to log out?</h2><p>You’ll need to sign in again to access your workspace.</p><div className="logout-confirm-actions"><button className="button button-ghost" onClick={event=>closePopup(setLogoutConfirmOpen,event)}>Cancel</button><button className="logout-confirm-action" onClick={event=>closePopup(setLogoutConfirmOpen,event,()=>logout())}>Yes, I’m sure, log out</button></div></section></div>,document.body)}
     {page==='Dashboard'&&(isFarmer ? <FarmerDashboard machinesState={machinesState} requestsState={requestsState} setRequestsState={setRequestsState}/> : <Dashboard go={go} machinesState={machinesState} requestsState={requestsState} flash={flash}/ >)}
     {page==='My Machinery'&&<Machinery machinesState={machinesState} setMachinesState={setMachinesState} filter={filter} setFilter={setFilter} search={search} setSearch={setSearch} go={go} flash={flash}/>}
@@ -331,10 +355,7 @@ function AuthPage({ page, go, initialRole = 'Farmer', theme, toggleTheme }) {
     : forgot ? resetStage ? `Enter the code sent to ${email} and choose a new password.` : 'Enter your email and we’ll send a reset code.'
       : 'Log in to your account.';
 
-  const completeSignIn = ({ newAccount = false } = {}) => {
-    if (newAccount) localStorage.setItem('hadalink-phone-reminder-pending', '1');
-    go('Dashboard', register ? role : initialRole);
-  };
+  const completeSignIn = () => go('Dashboard', register ? role : initialRole);
 
   async function submitAccount(event) {
     event.preventDefault();
@@ -347,7 +368,7 @@ function AuthPage({ page, go, initialRole = 'Farmer', theme, toggleTheme }) {
         setStage('verify');
       } else if (verificationStage) {
         await authRequest('/auth/verify-email', { email, code });
-        completeSignIn({ newAccount: true });
+        completeSignIn();
       } else if (forgot && !resetStage) {
         await authRequest('/auth/forgot-password', { email });
         setStage('reset');
@@ -373,8 +394,8 @@ function AuthPage({ page, go, initialRole = 'Farmer', theme, toggleTheme }) {
     setBusy(true);
     setError('');
     try {
-      const result = await authRequest('/auth/google', { credential, role: role.toLowerCase() });
-      completeSignIn({ newAccount: result.data?.created === true });
+      await authRequest('/auth/google', { credential, role: role.toLowerCase() });
+      completeSignIn();
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -451,6 +472,38 @@ function AuthPage({ page, go, initialRole = 'Farmer', theme, toggleTheme }) {
     {!forgot && !verificationStage && <><div className="auth-divider"><span />OR<span /></div><div className="social-row">{import.meta.env.VITE_GOOGLE_CLIENT_ID ? <div className="google-button-slot" ref={googleButtonRef} /> : <button className="google-fallback" type="button" onClick={() => setError('Google sign-in is not configured yet.')}><span className="google-mark">G</span> Continue with Google</button>}</div></>}
   </form>{forgot && <div className="reset-note"><ShieldCheck size={17} /><span>We’ll send a secure one-time code to the email associated with your account.</span></div>}</div><footer className="auth-footer">{register ? <>Have an account? <button className="text-link" onClick={() => go('login')}>Log in</button></> : forgot ? <>Remember your password? <button className="text-link" onClick={() => go('login')}>Log in</button></> : <>New to HadaLink? <button className="text-link" onClick={() => go('register')}>Create account <ArrowRight size={13} /></button></>}</footer></section><aside className="auth-image-side"><img src="https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1200&q=85" alt="Farmland in Plateau State" /><div className="auth-image-overlay" /><article className="auth-quote"><Leaf size={19} /><h2>“The right machine, right when you need it.”</h2><p>Reliable tractors and farm equipment, connected locally.</p></article></aside></main>;
 }
+function ProfileOnboarding({ user, onUserUpdated, onComplete, onLogout }) {
+  const steps = requiredProfileSteps(user);
+  const [value, setValue] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const step = steps[0];
+  const totalSteps = user?.role === 'provider' ? 4 : 3;
+  const displayStep = totalSteps - steps.length + 1;
+  if (!step) return null;
+  const Icon = step.icon;
+  async function submit(event) {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      const result = await authRequest('/auth/profile', { [step.field]: value.trim() }, 'PATCH');
+      const updated = result.data.user;
+      onUserUpdated(updated);
+      const nextSteps = requiredProfileSteps(updated);
+      if (!nextSteps.length) onComplete(updated);
+      else {
+        setValue('');
+      }
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return <main className="profile-onboarding"><section className="profile-onboarding-card"><header className="profile-onboarding-header"><span className="brand-icon"><img src="/hadalink-mark.png" alt="HadaLink" /></span><button type="button" className="button button-ghost button-small" onClick={onLogout}><LogOut size={14}/> Log out</button></header><div className="onboarding-progress-label"><span>COMPLETE YOUR PROFILE</span><span>STEP {displayStep} OF {totalSteps}</span></div><div className="onboarding-progress-track"><span style={{ width: `${(displayStep / totalSteps) * 100}%` }}/></div><span className="onboarding-step-icon"><Icon size={22}/></span><span className="eyebrow">{user?.role === 'provider' ? 'PROVIDER SETUP' : 'FARMER SETUP'}</span><h1>{step.title}</h1><p className="onboarding-description">{step.description}</p><form onSubmit={submit}><Field icon={Icon} label={step.label.toUpperCase()} type={step.type} inputMode={step.type === 'tel' ? 'tel' : undefined} autoComplete={step.field === 'phone' || step.field === 'whatsapp' ? 'tel' : 'organization'} placeholder={step.placeholder} value={value} onChange={event => setValue(event.target.value)} required minLength={step.type === 'tel' ? 7 : 2} maxLength={step.type === 'tel' ? 32 : step.field === 'primaryArea' ? 120 : 140} autoFocus />{error && <div className="auth-error" role="alert">{error}</div>}<div className="onboarding-actions"><button type="submit" className="button button-primary onboarding-continue" disabled={busy}>{busy ? 'Saving…' : steps.length === 1 ? 'Finish setup' : 'Next'} {!busy && <ArrowRight size={15}/>}</button></div></form><div className="onboarding-verification-note"><ShieldCheck size={16}/><span>Phone and WhatsApp numbers are collected now. We’ll keep reminding you until they’re verified.</span></div></section></main>;
+}
+
 function Field({ icon: Icon, label, trailing, ...props }) { return <label className="field"><span className="field-label">{label}</span><span className="field-control"><Icon size={17} /><input {...props} />{trailing}</span></label> }
 
 function Metric({ label, value, detail, icon: Icon, tone = 'green' }) { return <article className={`metric-card metric-${tone}`}><div className="metric-top"><span>{label}</span><span className="metric-icon"><Icon size={18} /></span></div><strong>{value}</strong><span className="metric-detail">{detail}</span></article> }
@@ -663,7 +716,8 @@ function SettingsPage({ currentUser }) {
   const [tab, setTab] = useState('Profile');
   const profile = currentUser?.profile || {};
   const areas = profile.serviceAreas?.length ? profile.serviceAreas : profile.primaryArea ? [profile.primaryArea] : [];
-  return <div className="view-stack"><div className="settings-tabs">{['Profile', 'Coverage', 'Payment coordination'].map((t, i) => <button key={t} className={tab === t ? 'selected' : ''} onClick={() => setTab(t)}>{[<User size={14} />, <MapPin size={14} />, <Banknote size={14} />][i]}{t}</button>)}</div><div className="settings-grid"><section className="panel settings-card"><PanelHead title={tab === 'Profile' ? 'Your profile' : tab === 'Coverage' ? 'Operating area & coverage' : 'Payment coordination'} subtitle={tab === 'Profile' ? 'Account details currently associated with your sign-in.' : 'Marketplace pilot settings and local booking coordination.'} /><div className="settings-fields">{tab !== 'Payment coordination' && <Field icon={User} label="FULL NAME" value={currentUser?.name || ''} readOnly placeholder="Name not available" />}{tab === 'Profile' && currentUser?.role === 'provider' && <Field icon={Wrench} label="BUSINESS OR FLEET NAME" value={profile.businessName || ''} readOnly placeholder="Not added yet" />}{tab === 'Coverage' && <Field icon={MapPin} label="PRIMARY DEPOT" value={profile.primaryArea || ''} readOnly placeholder="Not added yet" />}{tab === 'Payment coordination' && <div className="settings-note"><Wallet size={16}/> Payment processing and stored bank details are not connected. Agree payment arrangements directly with the other party.</div>}{tab !== 'Payment coordination' && <Field icon={Mail} label="EMAIL ADDRESS" type="email" value={currentUser?.email || ''} readOnly />}{tab === 'Profile' && <Field icon={MapPin} label="PHONE NUMBER" value={profile.phone || ''} readOnly placeholder="Not added yet" trailing={<span className={`phone-status ${profile.phoneVerified ? 'verified' : ''}`}>{profile.phoneVerified ? 'Verified' : 'Not verified'}</span>} />}</div>{tab === 'Profile' && <p className="settings-help">Phone verification is not set up yet. Your number will appear here after it has been added.</p>}</section><aside className="view-stack"><section className="panel profile-summary"><span className="profile-check"><BadgeCheck size={24} /></span><span className="eyebrow"><span /> ACCOUNT</span><h3>{currentUser?.name || 'Your account'}</h3><p>Your profile details are shown here as currently saved to your HadaLink account.</p><div><ShieldCheck size={14} />{profile.phoneVerified ? 'Phone number verified' : 'Phone number not verified'}</div></section><section className="panel coverage-card"><PanelHead title="Your coverage" /><div className="area-tags">{areas.length ? areas.map(area => <span key={area}><MapPin size={11} />{area}</span>) : <span>No areas added yet</span>}</div><p>Operating areas will appear here when they have been added to your profile.</p><button className="button button-ghost button-small" onClick={() => setTab('Coverage')}><MapPin size={13} /> View coverage</button></section></aside></div></div>;
+  const status = (verified) => <span className={`phone-status ${verified ? 'verified' : ''}`}>{verified ? 'Verified' : 'Not verified'}</span>;
+  return <div className="view-stack"><div className="settings-tabs">{['Profile', 'Coverage', 'Payment coordination'].map((t, i) => <button key={t} className={tab === t ? 'selected' : ''} onClick={() => setTab(t)}>{[<User size={14} />, <MapPin size={14} />, <Banknote size={14} />][i]}{t}</button>)}</div><div className="settings-grid"><section className="panel settings-card"><PanelHead title={tab === 'Profile' ? 'Your profile' : tab === 'Coverage' ? 'Operating area & coverage' : 'Payment coordination'} subtitle={tab === 'Profile' ? 'Account details currently associated with your sign-in.' : 'Marketplace pilot settings and local booking coordination.'} /><div className="settings-fields">{tab !== 'Payment coordination' && <Field icon={User} label="FULL NAME" value={currentUser?.name || ''} readOnly placeholder="Name not available" />}{tab === 'Profile' && currentUser?.role === 'provider' && <Field icon={Wrench} label="BUSINESS OR FLEET NAME" value={profile.businessName || ''} readOnly placeholder="Not added yet" />}{tab === 'Coverage' && <Field icon={MapPin} label="PRIMARY DEPOT" value={profile.primaryArea || ''} readOnly placeholder="Not added yet" />}{tab === 'Payment coordination' && <div className="settings-note"><Wallet size={16}/> Payment processing and stored bank details are not connected. Agree payment arrangements directly with the other party.</div>}{tab !== 'Payment coordination' && <Field icon={Mail} label="EMAIL ADDRESS" type="email" value={currentUser?.email || ''} readOnly />}{tab === 'Profile' && <><Field icon={MapPin} label="PHONE NUMBER" value={profile.phone || ''} readOnly placeholder="Not added yet" trailing={status(profile.phoneVerified)} /><Field icon={MessageCircle} label="WHATSAPP NUMBER" value={profile.whatsapp || ''} readOnly placeholder="Not added yet" trailing={status(profile.whatsappVerified)} /></>}</div>{tab === 'Profile' && <p className="settings-help">Phone and WhatsApp verification are pending. Notifications will remain visible until each number is verified.</p>}</section><aside className="view-stack"><section className="panel profile-summary"><span className="profile-check"><BadgeCheck size={24} /></span><span className="eyebrow"><span /> ACCOUNT</span><h3>{currentUser?.name || 'Your account'}</h3><p>Your profile details are shown here as currently saved to your HadaLink account.</p><div><ShieldCheck size={14} />{profile.phoneVerified ? 'Phone number verified' : 'Phone number not verified'}</div><div><ShieldCheck size={14} />{profile.whatsappVerified ? 'WhatsApp number verified' : 'WhatsApp number not verified'}</div></section><section className="panel coverage-card"><PanelHead title="Your coverage" /><div className="area-tags">{areas.length ? areas.map(area => <span key={area}><MapPin size={11} />{area}</span>) : <span>No areas added yet</span>}</div><p>Operating areas will appear here when they have been added to your profile.</p><button className="button button-ghost button-small" onClick={() => setTab('Coverage')}><MapPin size={13} /> View coverage</button></section></aside></div></div>;
 }
 
 createRoot(document.getElementById('root')).render(<React.StrictMode><App /></React.StrictMode>);
