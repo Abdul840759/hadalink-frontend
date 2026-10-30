@@ -1386,3 +1386,74 @@ button,.button,input,select,textarea{line-height:1.4}
 .google-fallback{width:100%;min-height:42px;border:1px solid var(--line2);border-radius:10px;background:transparent;color:inherit}
 .google-fallback:hover{background:var(--card2)}
 [data-theme="light"] .auth-error{background:#fff1ef;color:#9e3026;border-color:#e9aaa3}
+
+/* Account identity stays in the top bar; the brand mark remains in the sidebar. */
+.desktop-account-logo{display:none!important}
+.topbar>.account-menu{display:flex;align-items:center;flex:none}
+.topbar .account-trigger{display:flex;align-items:center;gap:10px;max-width:min(32vw,320px);padding:4px 9px 4px 12px;border:1px solid var(--line2);border-radius:999px;background:var(--surface);color:var(--white)}
+.account-name{max-width:190px;overflow:hidden;color:var(--white);font-size:12px;font-weight:650;text-overflow:ellipsis;white-space:nowrap}
+.topbar .account-trigger .avatar-logo,.account-dropdown-identity>.avatar-logo{display:grid;width:36px;height:36px;flex:none;place-items:center;border:1px solid var(--line2);border-radius:50%;background:var(--card2);color:var(--white)}
+.avatar-logo>img{width:100%;height:100%;object-fit:cover}
+.avatar-initials{font-size:11px;font-weight:750;letter-spacing:.04em}
+.account-modal-backdrop{position:fixed;inset:0;z-index:60;display:grid;width:100vw;height:100dvh;place-items:center;padding:24px;border:0;background:rgba(3,13,8,.55);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)}
+.account-dropdown{position:relative;inset:auto;display:grid;gap:8px;width:min(340px,calc(100vw - 36px));padding:18px;border:1px solid var(--line2);border-radius:20px;background:var(--surface);color:var(--white);box-shadow:0 24px 70px rgba(0,0,0,.42);animation:account-popup-in .18s ease-out}
+.account-dropdown-identity{display:flex!important;align-items:center;gap:12px;padding:4px 2px 14px!important;border-bottom:1px solid var(--line2);color:var(--white)!important}
+.account-dropdown-identity>span:last-child{display:grid;min-width:0;gap:3px}
+.account-dropdown-identity strong{overflow:hidden;color:var(--white);font-size:14px;text-overflow:ellipsis;white-space:nowrap}
+.account-dropdown-identity small{overflow:hidden;color:var(--muted);font-size:11px;text-overflow:ellipsis;white-space:nowrap}
+.account-dropdown>span.account-theme-toggle{display:flex;align-items:center;gap:10px;padding:12px 3px;border-bottom:1px solid var(--line2);color:var(--white);font-size:13px}
+.account-dropdown>span[role="button"]{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--line2);border-radius:12px;background:var(--card2);color:var(--white);font-size:13px;text-align:left;cursor:pointer}
+.account-dropdown>span[role="button"] svg{color:#f08078}
+@media(max-width:680px){
+  .topbar .account-trigger{gap:0;padding:2px;border-radius:50%;background:transparent}
+  .topbar .account-trigger .account-name,.topbar .account-trigger>svg{display:none}
+  .topbar .account-trigger .avatar-logo{width:36px;height:36px}
+  .topbar>.account-menu{margin-left:0}
+  .account-dropdown{background:rgba(18,43,29,.97);border-color:rgba(220,244,226,.24);color:#f0f7ef}
+  .account-dropdown-identity{border-color:rgba(220,244,226,.18);color:#f0f7ef!important}
+  .account-dropdown-identity strong{color:#f0f7ef}
+  .account-dropdown-identity small{color:#b7cbbb}
+  .account-dropdown>span.account-theme-toggle{border-color:rgba(220,244,226,.18);color:#f0f7ef}
+  .account-dropdown>span[role="button"]{border-color:rgba(220,244,226,.15);background:rgba(255,255,255,.08);color:#fff}
+}
+:root[data-theme="light"] .account-dropdown{background:rgba(255,255,255,.98);border-color:#d7e3da}
+:root[data-theme="light"] .account-dropdown-identity{border-color:#dce7de;color:#1b2b20!important}
+:root[data-theme="light"] .account-dropdown-identity strong,:root[data-theme="light"] .account-dropdown>span.account-theme-toggle{color:#1b2b20}
+:root[data-theme="light"] .account-dropdown-identity small{color:#63776a}
+
+/* Calm, readable landing hero scale and spacing across wide screens and phones. */
+.hero{min-height:clamp(590px,82svh,790px);padding:clamp(112px,15vh,146px) max(calc((100vw - 1160px)/2),clamp(28px,7vw,110px)) 96px}
+.hero-content{width:min(100%,780px);max-width:780px}
+.hero-content>h1{max-width:14ch;margin:24px 0 18px;font-size:clamp(46px,5.4vw,76px);line-height:1.08;letter-spacing:-.045em;text-wrap:balance}
+.hero-content>p{max-width:54ch;font-size:clamp(14px,1.15vw,16px);line-height:1.78}
+.hero-actions{gap:12px;margin-top:28px}
+.hero-proof{margin-top:25px;font-size:11px}
+.hero-side-note{right:max(calc((100vw - 1160px)/2),clamp(24px,5vw,76px));bottom:70px;padding:13px 16px;font-size:10px}
+.hero-overlay{background:linear-gradient(90deg,rgba(3,20,11,.9),rgba(3,20,11,.74) 48%,rgba(4,20,12,.24) 100%),linear-gradient(0deg,#07180f 0%,transparent 31%,rgba(4,18,10,.12) 100%)}
+@media(max-width:900px){
+ .hero{min-height:clamp(600px,84svh,760px);padding-right:7vw;padding-left:7vw}
+ .hero-content{max-width:690px}
+ .hero-content>h1{font-size:clamp(46px,7.2vw,68px)}
+ .hero-side-note{right:7vw}
+}
+@media(max-width:680px){
+ .hero{min-height:max(630px,calc(100svh - 65px));padding:clamp(104px,15svh,140px) 7vw max(78px,env(safe-area-inset-bottom));align-items:center}
+ .hero-image{object-position:58% center}
+ .hero-overlay{background:linear-gradient(90deg,rgba(3,20,11,.84),rgba(3,20,11,.63) 72%,rgba(3,20,11,.48)),linear-gradient(0deg,#07180f 0%,rgba(4,18,10,.2) 45%,rgba(4,18,10,.1) 100%)}
+ .hero-content{max-width:520px}
+ .hero-content>h1{max-width:13ch;margin:21px 0 15px;font-size:clamp(39px,9.5vw,58px);line-height:1.08;letter-spacing:-.045em}
+ .hero-content>h1 br{display:none}
+ .hero-content>p{max-width:43ch;font-size:clamp(13px,3.7vw,15px);line-height:1.72}
+ .hero-actions{display:grid;grid-template-columns:1fr;gap:9px;margin-top:22px}
+ .hero-actions>.button{width:min(100%,340px);min-height:46px;justify-content:center}
+ .hero-proof{gap:10px;margin-top:19px;font-size:10px}
+ .proof-avatars>span{width:25px;height:25px}
+ .hero-side-note{display:none}
+ .scroll-indicator{bottom:17px}
+}
+@media(max-width:380px){
+ .hero{padding-right:6vw;padding-left:6vw}
+ .hero-content>h1{font-size:clamp(36px,9.4vw,42px)}
+ .hero-badge{gap:7px;padding:7px 9px;font-size:8px;letter-spacing:.6px}
+ .hero-proof{font-size:9px}
+}
