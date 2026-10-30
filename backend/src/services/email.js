@@ -16,20 +16,41 @@ export async function sendEmailCode({ email, name, code, purpose }) {
   const intro = reset ? 'Use this code to reset your password.' : 'Use this code to verify your email and finish creating your account.';
   const htmlContent = `<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;color:#183326"><h1>HadaLink</h1><p>Hello ${escapeHtml(name || 'there')},</p><p>${intro}</p><p style="font-size:28px;font-weight:700;letter-spacing:8px">${code}</p><p>This code expires in 10 minutes. If you did not request it, you can ignore this email.</p></div>`;
 
-  const result = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: { 'api-key': apiKey, 'content-type': 'application/json', accept: 'application/json' },
-    body: JSON.stringify({
-      sender: { email: senderEmail, name: 'HadaLink' },
-      to: [{ email }],
-      subject,
-      htmlContent,
-      textContent: `HadaLink verification code: ${code}. It expires in 10 minutes.`,
-      tags: ['hadalink-auth-code'],
-    }),
-  });
+  let result;
+  try {
+    result = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: { 'api-key': apiKey, 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({
+        sender: { email: senderEmail, name: 'HadaLink' },
+        to: [{ email }],
+        subject,
+        htmlContent,
+        textContent: `HadaLink verification code: ${code}. It expires in 10 minutes.`,
+        tags: ['hadalink-auth-code'],
+      }),
+    });
+  } catch (cause) {
+    console.error('[email] Brevo request failed before receiving a response:', cause?.name || 'NetworkError');
+    const error = new Error('Could not send the verification email.');
+    error.status = 502;
+    throw error;
+  }
 
   if (!result.ok) {
+    let responseDetails = {};
+    try {
+      const body = await result.json();
+      responseDetails = {
+        code: typeof body?.code === 'string' ? body.code : undefined,
+        message: typeof body?.message === 'string'
+          ? body.message.replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, '[redacted email]').slice(0, 400)
+          : undefined,
+      };
+    } catch {
+      // Keep the client response generic if Brevo returns an unreadable response.
+    }
+    console.error(`[email] Brevo rejected verification email (HTTP ${result.status}): ${JSON.stringify(responseDetails)}`);
     const error = new Error('Could not send the verification email.');
     error.status = 502;
     throw error;

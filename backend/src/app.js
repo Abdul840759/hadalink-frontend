@@ -6,6 +6,8 @@ import equipmentRouter from './routes/equipment.js';
 import healthRouter from './routes/health.js';
 
 const app = express();
+// Render terminates TLS and forwards requests through one trusted proxy.
+app.set('trust proxy', 1);
 const allowedOrigins = (process.env.FRONTEND_ORIGIN || 'http://localhost:5173')
   .split(',')
   .map(origin => origin.trim())
