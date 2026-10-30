@@ -1532,3 +1532,20 @@ button,.button,input,select,textarea{line-height:1.4}
 .verification-notice small,.notification-footnote{color:var(--muted);font-size:11px;line-height:1.5;overflow-wrap:anywhere}
 .notification-footnote{display:block;margin-top:13px}
 @media(max-width:600px){.profile-onboarding{padding:16px}.profile-onboarding-card{border-radius:20px}.profile-onboarding-header{margin-bottom:26px}.profile-onboarding-card h1{font-size:25px}.onboarding-description{font-size:12px}.onboarding-actions .button{min-height:43px}.onboarding-continue{flex:1}}
+
+/* Cloudinary-backed profile and equipment image controls */
+.profile-photo-editor{display:flex;align-items:center;gap:14px;margin:18px 0 20px;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--card2)}
+.profile-photo-preview{display:grid;width:58px;height:58px;flex:none;place-items:center;overflow:hidden;border:1px solid var(--line2);border-radius:50%;background:linear-gradient(145deg,#fffef9,#eaf4eb);color:#185b3b;font-size:17px;font-weight:700}
+.profile-photo-preview img{width:100%;height:100%;object-fit:cover}
+.profile-photo-editor>div{display:grid;gap:4px;min-width:0;flex:1}
+.profile-photo-editor>div>strong{color:var(--white);font-size:12px}
+.profile-photo-editor>div>small{color:var(--muted);font-size:10px;line-height:1.45}
+.profile-photo-editor>.button{position:relative;flex:none;overflow:hidden}
+.profile-photo-editor input[type=file]{position:absolute;inset:0;width:100%;height:100%;cursor:pointer;opacity:0}
+.uploaded-photos>span{display:flex;align-items:center;gap:7px;min-width:0}
+.uploaded-photos>span>img{width:28px;height:28px;flex:none;border-radius:6px;object-fit:cover}
+.uploaded-photos>span>span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.uploaded-photos>span>button{display:grid;place-items:center;flex:none;border:0;background:none;color:var(--muted);cursor:pointer}
+.upload-error{display:block;margin:7px 0;color:#df6559!important;font-size:10px;line-height:1.45}
+.upload-box input[type=file]{cursor:pointer}
+@media(max-width:540px){.profile-photo-editor{gap:10px;padding:11px}.profile-photo-preview{width:48px;height:48px}.profile-photo-editor>div>small{font-size:9px}.profile-photo-editor>.button{padding:0 8px;font-size:9px}}

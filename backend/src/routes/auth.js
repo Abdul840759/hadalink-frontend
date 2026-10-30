@@ -1,4 +1,4 @@
-import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { OAuth2Client } from 'google-auth-library';
 import { rateLimit } from 'express-rate-limit';
@@ -208,6 +208,46 @@ router.post('/google', authLimiter, async (request, response) => {
 });
 
 router.get('/me', requireAuth, (request, response) => response.json({ data: { user: publicUser(request.user) } }));
+
+router.post('/cloudinary/signature', requireAuth, (request, response) => {
+  const { CLOUDINARY_CLOUD_NAME: cloudName, CLOUDINARY_API_KEY: apiKey, CLOUDINARY_API_SECRET: apiSecret } = process.env;
+  if (!cloudName || !apiKey || !apiSecret) return response.status(503).json({ error: 'Image uploads are not configured yet.' });
+  const purpose = request.body?.purpose;
+  if (!['avatar', 'equipment'].includes(purpose)) return response.status(400).json({ error: 'Choose a valid image upload type.' });
+  const timestamp = Math.floor(Date.now() / 1000);
+  const folder = `hadalink/${request.user.id}/${purpose}`;
+  const publicId = `${purpose}-${randomBytes(12).toString('hex')}`;
+  const signedParams = `folder=${folder}&public_id=${publicId}&timestamp=${timestamp}`;
+  const signature = createHash('sha1').update(`${signedParams}${apiSecret}`).digest('hex');
+  return response.json({ data: { cloudName, apiKey, timestamp, folder, publicId, signature } });
+});
+
+router.patch('/profile/avatar', requireAuth, async (request, response) => {
+  const { CLOUDINARY_CLOUD_NAME: cloudName, CLOUDINARY_API_KEY: apiKey, CLOUDINARY_API_SECRET: apiSecret } = process.env;
+  if (!cloudName || !apiKey || !apiSecret) return response.status(503).json({ error: 'Image uploads are not configured yet.' });
+  const publicId = String(request.body?.publicId || '');
+  const avatarUrl = String(request.body?.avatarUrl || '');
+  const expectedPrefix = `hadalink/${request.user.id}/avatar/`;
+  let imageUrl;
+  try { imageUrl = new URL(avatarUrl); } catch { return response.status(400).json({ error: 'Upload a valid profile image first.' }); }
+  if (!publicId.startsWith(expectedPrefix) || imageUrl.protocol !== 'https:' || imageUrl.hostname !== 'res.cloudinary.com' || imageUrl.pathname.split('/')[1] !== cloudName) {
+    return response.status(400).json({ error: 'The profile image upload could not be verified.' });
+  }
+  const previousPublicId = request.user.profile?.avatarPublicId;
+  request.user.profile.avatarUrl = avatarUrl;
+  request.user.profile.avatarPublicId = publicId;
+  await request.user.save();
+
+  if (previousPublicId && previousPublicId.startsWith(expectedPrefix) && previousPublicId !== publicId) {
+    const timestamp = Math.floor(Date.now() / 1000);
+    const signature = createHash('sha1').update(`public_id=${previousPublicId}&timestamp=${timestamp}${apiSecret}`).digest('hex');
+    fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/destroy`, {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ public_id: previousPublicId, timestamp: String(timestamp), api_key: apiKey, signature }),
+    }).catch(error => console.error('[cloudinary] Could not remove replaced avatar:', error.message));
+  }
+  return response.json({ data: { user: publicUser(request.user) } });
+});
 router.patch('/profile', requireAuth, async (request, response) => {
   const allowedFields = ['phone', 'whatsapp', 'businessName', 'primaryArea'];
   const updates = Object.fromEntries(allowedFields
