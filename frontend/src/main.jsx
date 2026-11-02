@@ -1,9 +1,20 @@
-import React, { useState } from 'react';
+import React, { Suspense, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import { ArrowLeft, ArrowRight, Bell, CalendarDays, Check, CheckCircle2, ChevronDown, CircleHelp, Download, Home, LogOut, Menu, MessageCircle, Plus, Search, Settings, ShieldCheck, Sprout, Tractor, Wallet, X, ArrowDown, ArrowUpRight, BadgeCheck, Banknote, BarChart3, Camera, ChevronLeft, ChevronRight, Clock3, CreditCard, Eye, EyeOff, Filter, Gauge, Globe2, Image, Leaf, LockKeyhole, Mail, MapPin, SlidersHorizontal, Star, TrendingUp, Upload, User, Users, Wrench, Sun, Moon } from 'lucide-react';
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
 import './styles.css';
+
+// Keep the charting package out of the initial app bundle. It is only needed
+// after a user opens a dashboard or analytics view.
+const Area = React.lazy(() => import('recharts').then(module => ({ default: module.Area })));
+const AreaChart = React.lazy(() => import('recharts').then(module => ({ default: module.AreaChart })));
+const Bar = React.lazy(() => import('recharts').then(module => ({ default: module.Bar })));
+const BarChart = React.lazy(() => import('recharts').then(module => ({ default: module.BarChart })));
+const CartesianGrid = React.lazy(() => import('recharts').then(module => ({ default: module.CartesianGrid })));
+const Cell = React.lazy(() => import('recharts').then(module => ({ default: module.Cell })));
+const ResponsiveContainer = React.lazy(() => import('recharts').then(module => ({ default: module.ResponsiveContainer })));
+const Tooltip = React.lazy(() => import('recharts').then(module => ({ default: module.Tooltip })));
+const XAxis = React.lazy(() => import('recharts').then(module => ({ default: module.XAxis })));
 
 const machines = [
   { name: 'Massey Ferguson 375 4WD', kind: 'Tractor', area: 'Jos South, Barkin Ladi', rate: '45,000', rating: '4.9', image: 'photo-1592982537447-7440770cbfc9', status: 'Available' },
@@ -198,6 +209,7 @@ function App() {
   const [machinesState, setMachinesState] = useState([]);
   const [providerListings, setProviderListings] = useState([]);
   const [providerListingsLoading, setProviderListingsLoading] = useState(false);
+  const authBootstrapInFlight = React.useRef(false);
   const [requestsState, setRequestsState] = useState(() => readStoredArray('hadalink-requests', requests));
   const [editingMachine, setEditingMachine] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
@@ -209,32 +221,32 @@ function App() {
   const toggleTheme = () => setTheme(value => value === 'dark' ? 'light' : 'dark');
   const publicPages = ['landing', 'About', 'login', 'register', 'forgot'];
   React.useEffect(() => {
-    if (publicPages.includes(page)) return undefined;
-    let active = true;
+    if (publicPages.includes(page) || currentUser || authBootstrapInFlight.current) return undefined;
+    authBootstrapInFlight.current = true;
     fetch(`${API_BASE}/auth/me`, { credentials: 'include' })
       .then(response => {
         if (!response.ok) throw new Error('Not signed in');
         return response.json();
       })
       .then(({ data }) => {
-        if (!active || !data?.user) return;
+        if (!data?.user) throw new Error('Not signed in');
         setCurrentUser(data.user);
         setOnboardingRequired(requiredProfileSteps(data.user).length > 0);
         const role = data.user.role === 'provider' ? 'Provider' : 'Farmer';
         localStorage.setItem('hadalink-role', role);
         setSignupRole(role);
         authRequest('/equipment', undefined, 'GET')
-          .then(({ data: items }) => { if (active && Array.isArray(items)) setMachinesState(items.map(mapEquipmentRecord)); })
-          .catch(error => { if (active) console.error('Could not load published equipment:', error); });
+          .then(({ data: items }) => { if (Array.isArray(items)) setMachinesState(items.map(mapEquipmentRecord)); })
+          .catch(error => { console.error('Could not load published equipment:', error); });
       })
       .catch(() => {
-        if (!active) return;
         setOnboardingRequired(false);
         history.replaceState({ page: 'login' }, '', '/login');
         setPage('login');
-      });
-    return () => { active = false; };
-  }, [page]);
+      })
+      .finally(() => { authBootstrapInFlight.current = false; });
+    return undefined;
+  }, [page, currentUser]);
   React.useEffect(() => {
     if (page !== 'My Machinery' || currentUser?.role !== 'provider') return undefined;
     let active = true;
@@ -368,7 +380,7 @@ function Landing({ go, theme, toggleTheme }) {
     <PublicNav go={go} theme={theme} toggleTheme={toggleTheme}/>
     <main>
       <section className="hero">
-        <img className="hero-image" src="https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=2200&q=85" alt="A farmer walking through a field at sunset" />
+        <img className="hero-image" src="https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=1440&q=75" srcSet="https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=720&q=75 720w, https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=1200&q=75 1200w, https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=1920&q=75 1920w" sizes="100vw" fetchPriority="high" alt="A farmer walking through a field at sunset" />
         <div className="hero-overlay" />
         <div className="hero-content"><span className="hero-badge"><span /> EQUIPMENT LISTINGS · PLATEAU STATE</span><h1><span className="hero-title-line">The right machine.</span><span className="hero-title-line">Right when <span className="hero-title-accent">you need it.</span></span></h1><p>Find and compare provider-listed equipment around Jos. Send a request with your date, location and service; the provider confirms availability and final terms.</p><div className="hero-actions"><button className="button button-harvest button-large" onClick={() => go('register', 'Farmer')}>Find machinery <ArrowRight size={18} /></button><button className="button button-glass button-large" onClick={() => go('register', 'Provider')}><Tractor size={17} /> List your equipment</button></div><div className="hero-proof"><div className="proof-avatars"><span>MU</span><span>DG</span><span>BP</span><span>+</span></div><span><strong>Built for farmers in Plateau.</strong><br />Connecting local farms, one booking at a time.</span></div></div>
         <div className="hero-side-note"><ShieldCheck size={15} /><span>Local providers. Clear listing details.<br /><strong>Made for your field.</strong></span></div><a href="#how" className="scroll-indicator">SCROLL TO EXPLORE <ArrowDown size={13} /></a>
@@ -582,15 +594,15 @@ function Dashboard({ go, machinesState, requestsState, flash }) {
     <div className="dashboard-grid">
       <section className="panel chart-panel">
         <PanelHead title="Booking activity" subtitle={`Illustrative demo snapshot · ${getWeekRange(weekOffset)}`}/>
-        <div className="chart-holder"><ResponsiveContainer width="100%" height="100%"><AreaChart data={chart} margin={{top:10,right:7,left:-28,bottom:0}}>
+        <div className="chart-holder"><Suspense fallback={<span className="chart-loading" aria-hidden="true"/>}><ResponsiveContainer width="100%" height="100%"><AreaChart data={chart} margin={{top:10,right:7,left:-28,bottom:0}}>
           <defs><linearGradient id="bookingWeekGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#19cb87" stopOpacity={.24}/><stop offset="100%" stopColor="#19cb87" stopOpacity={0}/></linearGradient></defs>
           <CartesianGrid stroke="rgba(164,194,172,.075)" vertical={false}/><XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill:'#798e80',fontSize:11}} dy={8}/><Tooltip contentStyle={{background:'#10281d',border:'1px solid #254333',borderRadius:10,fontSize:12}}/><Area type="monotone" dataKey="jobs" stroke="#24d18c" fill="url(#bookingWeekGradient)" strokeWidth={2} name="Booking requests"/>
-        </AreaChart></ResponsiveContainer></div>
+        </AreaChart></ResponsiveContainer></Suspense></div>
         <div className="booking-week-summary"><span>{totalBookings} booking requests in this week</span><span>{busiestDay} on the busiest day</span></div>
       </section>
       <section className="panel rating-panel"><PanelHead title="Farmer ratings" subtitle="Ratings left after completed bookings."/><div className="rating-ring"><div><strong>{averageRating}</strong><span>{ratings.length ? 'OUT OF 5' : 'NO REVIEWS YET'}</span></div></div><div className="rating-footer"><span><Star size={14} fill="currentColor"/> {ratings.length ? `${ratings.length} recorded reviews` : 'Complete a booking to collect feedback'}</span><strong>{completedRequests.length} completed jobs</strong></div></section>
     </div>
-    <section className="panel weekly-panel"><PanelHead title={`Machinery hired · ${getWeekRange(weekOffset)}`} subtitle="Illustrative demo booking snapshot." action={<span className="stat-inline">{totalBookings}<small>bookings this week</small></span>}/><div className="weekly-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={chart} margin={{top:9,right:8,left:-28,bottom:0}}><CartesianGrid stroke="rgba(164,194,172,.075)" vertical={false}/><XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill:'#798e80',fontSize:11}} dy={8}/><Tooltip contentStyle={{background:'#10281d',border:'1px solid #254333',borderRadius:10,fontSize:12}}/><Bar dataKey="jobs" name="Bookings" radius={[5,5,0,0]} maxBarSize={34}>{chart.map((day,index)=><Cell key={day.day} fill={day.jobs===busiestDay?'#f2aa32':'#13ae77'}/>)}</Bar></BarChart></ResponsiveContainer></div></section>
+    <section className="panel weekly-panel"><PanelHead title={`Machinery hired · ${getWeekRange(weekOffset)}`} subtitle="Illustrative demo booking snapshot." action={<span className="stat-inline">{totalBookings}<small>bookings this week</small></span>}/><div className="weekly-chart"><Suspense fallback={<span className="chart-loading" aria-hidden="true"/>}><ResponsiveContainer width="100%" height="100%"><BarChart data={chart} margin={{top:9,right:8,left:-28,bottom:0}}><CartesianGrid stroke="rgba(164,194,172,.075)" vertical={false}/><XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill:'#798e80',fontSize:11}} dy={8}/><Tooltip contentStyle={{background:'#10281d',border:'1px solid #254333',borderRadius:10,fontSize:12}}/><Bar dataKey="jobs" name="Bookings" radius={[5,5,0,0]} maxBarSize={34}>{chart.map((day,index)=><Cell key={day.day} fill={day.jobs===busiestDay?'#f2aa32':'#13ae77'}/>)}</Bar></BarChart></ResponsiveContainer></Suspense></div></section>
     <section className="quick-glance"><PanelHead title="Your machinery" subtitle="Manage the equipment listed in your local fleet." action={<button className="button button-ghost button-small" onClick={()=>go('My Machinery')}>View all <ArrowRight size={13}/></button>}/><div className="glance-grid">{machinesState.slice(0,3).map(machine=><MachineCard key={machine.name} machine={machine} compact onClick={()=>go('My Machinery')}/>)}</div></section>
     <section className="panel table-panel"><PanelHead title="Recent requests" subtitle="The latest bookings from farmers near you." action={<button className="button button-ghost button-small" onClick={()=>go('Requests')}>All requests <ArrowRight size={13}/></button>}/><RequestTable requestsState={requestsState.slice(0,4)} compactMobile/></section>
   </div>;
@@ -754,8 +766,8 @@ function Analytics({ machinesState, requestsState }) {
     <Metric label="COMPLETED JOBS" value={String(completedJobs)} detail={<><CheckCircle2 size={13}/>Recorded transactions</>} icon={CheckCircle2} tone="orange"/>
     <Metric label="AVG. BOOKING VALUE" value={`₦${averageValue.toLocaleString('en-NG')}`} detail={<><BarChart3 size={13}/>Illustrative estimate</>} icon={Banknote}/>
   </div><div className="analytics-grid">
-    <section className="panel analytics-chart"><PanelHead title="Booking activity" subtitle={`Requests received · ${getWeekRange(weekOffset)}`}/><div className="earnings-chart-inner"><ResponsiveContainer width="100%" height="100%"><AreaChart data={data} margin={{top:12,right:10,left:-20,bottom:0}}><defs><linearGradient id="analyticsJobs" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#22c98a" stopOpacity={.25}/><stop offset="100%" stopColor="#22c98a" stopOpacity={0}/></linearGradient></defs><CartesianGrid stroke="rgba(164,194,172,.09)" vertical={false}/><XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill:'#86988c',fontSize:12}}/><Tooltip contentStyle={{background:'#10281d',border:'1px solid #254333',borderRadius:10,fontSize:12}}/><Area type="monotone" dataKey="jobs" name="Booking requests" stroke="#24d18c" fill="url(#analyticsJobs)" strokeWidth={2}/></AreaChart></ResponsiveContainer></div><p className="analytics-week-total">{totalBookings} booking requests · {getWeekRange(weekOffset)}</p></section>
-    <section className="panel analytics-chart"><PanelHead title="Indicative rental value" subtitle={`Daily estimate · ₦ thousands · ${getWeekRange(weekOffset)}`}/><div className="earnings-chart-inner"><ResponsiveContainer width="100%" height="100%"><BarChart data={data} margin={{top:12,right:10,left:-20,bottom:0}}><CartesianGrid stroke="rgba(164,194,172,.09)" vertical={false}/><XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill:'#86988c',fontSize:12}}/><Tooltip contentStyle={{background:'#10281d',border:'1px solid #254333',borderRadius:10,fontSize:12}} formatter={value=>[`₦${value},000`,'Indicative rental value']}/><Bar dataKey="income" fill="#efa812" radius={[6,6,0,0]}/></BarChart></ResponsiveContainer></div><p className="analytics-week-total">₦{(totalIncome*1000).toLocaleString('en-NG')} indicative value this week</p></section>
+    <section className="panel analytics-chart"><PanelHead title="Booking activity" subtitle={`Requests received · ${getWeekRange(weekOffset)}`}/><div className="earnings-chart-inner"><Suspense fallback={<span className="chart-loading" aria-hidden="true"/>}><ResponsiveContainer width="100%" height="100%"><AreaChart data={data} margin={{top:12,right:10,left:-20,bottom:0}}><defs><linearGradient id="analyticsJobs" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#22c98a" stopOpacity={.25}/><stop offset="100%" stopColor="#22c98a" stopOpacity={0}/></linearGradient></defs><CartesianGrid stroke="rgba(164,194,172,.09)" vertical={false}/><XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill:'#86988c',fontSize:12}}/><Tooltip contentStyle={{background:'#10281d',border:'1px solid #254333',borderRadius:10,fontSize:12}}/><Area type="monotone" dataKey="jobs" name="Booking requests" stroke="#24d18c" fill="url(#analyticsJobs)" strokeWidth={2}/></AreaChart></ResponsiveContainer></Suspense></div><p className="analytics-week-total">{totalBookings} booking requests · {getWeekRange(weekOffset)}</p></section>
+    <section className="panel analytics-chart"><PanelHead title="Indicative rental value" subtitle={`Daily estimate · ₦ thousands · ${getWeekRange(weekOffset)}`}/><div className="earnings-chart-inner"><Suspense fallback={<span className="chart-loading" aria-hidden="true"/>}><ResponsiveContainer width="100%" height="100%"><BarChart data={data} margin={{top:12,right:10,left:-20,bottom:0}}><CartesianGrid stroke="rgba(164,194,172,.09)" vertical={false}/><XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill:'#86988c',fontSize:12}}/><Tooltip contentStyle={{background:'#10281d',border:'1px solid #254333',borderRadius:10,fontSize:12}} formatter={value=>[`₦${value},000`,'Indicative rental value']}/><Bar dataKey="income" fill="#efa812" radius={[6,6,0,0]}/></BarChart></ResponsiveContainer></Suspense></div><p className="analytics-week-total">₦{(totalIncome*1000).toLocaleString('en-NG')} indicative value this week</p></section>
   </div><p className="analytics-note"><ShieldCheck size={15}/> Historic weeks are illustrative snapshots for this prototype. The 5% transaction commission is proposed; payments are not collected here.</p></div>;
 }
 function Earnings({ requestsState }) {
