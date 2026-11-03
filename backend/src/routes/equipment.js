@@ -118,6 +118,30 @@ router.post('/', requireAuth, requireDatabase, async (request, response) => {
   return response.status(201).json({ data: item });
 });
 
+router.patch('/:id', requireAuth, requireDatabase, async (request, response) => {
+  if (request.user.role !== 'provider') return response.status(403).json({ error: 'Only providers can update equipment listings.' });
+  if (!mongoose.isValidObjectId(request.params.id)) return response.status(400).json({ error: 'Invalid equipment id.' });
+  const body = request.body || {};
+  const name = String(body.name || '').trim();
+  const category = String(body.category || '').trim();
+  const area = String(body.area || '').trim();
+  const services = Array.isArray(body.services) ? [...new Set(body.services.map(value => String(value).trim()).filter(Boolean))].slice(0, 20) : [];
+  const amount = Number(String(body.rate ?? '').replace(/[₦,\s]/g, ''));
+  const areaParts = area.split(',').map(part => part.trim()).filter(Boolean);
+  if (name.length < 2 || name.length > 140 || !equipmentCategories.includes(category) || !Number.isFinite(amount) || amount <= 0 || !areaParts.length || area.length > 220 || !services.length) {
+    return response.status(400).json({ error: 'Add a valid machine name, category, rate, operating area, and at least one service.' });
+  }
+  const item = await Equipment.findOneAndUpdate({ _id: request.params.id, provider: request.user._id }, {
+    $set: {
+      name, makeModel: name, category, description: String(body.description || '').trim().slice(0, 3000), services,
+      'location.state': 'Plateau', 'location.lga': areaParts[0].slice(0, 100), 'location.area': areaParts.slice(1).join(', ').slice(0, 120),
+      'rate.amount': amount, 'rate.unit': 'hectare', operatorArrangement: body.operatorAvailable === false ? 'not-included' : 'by-arrangement',
+    },
+  }, { new: true, runValidators: true }).lean();
+  if (!item) return response.status(404).json({ error: 'Equipment listing not found in your account.' });
+  return response.json({ data: item });
+});
+
 router.get('/:id', requireDatabase, async (request, response) => {
   if (!mongoose.isValidObjectId(request.params.id)) return response.status(400).json({ error: 'Invalid equipment id.' });
   const item = await Equipment.findOne({ _id: request.params.id, status: 'available' })

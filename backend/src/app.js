@@ -3,6 +3,7 @@ import cookieParser from 'cookie-parser';
 import express from 'express';
 import authRouter from './routes/auth.js';
 import equipmentRouter from './routes/equipment.js';
+import bookingsRouter from './routes/bookings.js';
 import healthRouter from './routes/health.js';
 
 const app = express();
@@ -30,6 +31,7 @@ app.get('/api', (_request, response) => {
 app.use('/api/health', healthRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/equipment', equipmentRouter);
+app.use('/api/bookings', bookingsRouter);
 
 app.use((_request, response) => {
   response.status(404).json({ error: 'Route not found' });
