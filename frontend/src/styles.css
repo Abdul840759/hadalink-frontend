@@ -330,7 +330,7 @@
  .auth-register .auth-form-side{align-self:stretch;justify-content:space-between}
 }
 /* Override the legacy desktop minimum width on narrower phones. */
-body{min-width:320px}
+body{min-width:0}
 @media(max-width:540px){.auth-register.auth-layout{padding-top:max(10px,env(safe-area-inset-top,0px));padding-right:max(16px,min(env(safe-area-inset-right,0px),24px));padding-bottom:max(10px,env(safe-area-inset-bottom,0px));padding-left:max(16px,min(env(safe-area-inset-left,0px),24px))}}
 @media(max-width:540px) and (max-height:720px){
  .auth-register .auth-form-side{min-height:auto;padding-top:5px;padding-bottom:6px}
@@ -664,8 +664,8 @@ button,a,input,select,textarea{-webkit-tap-highlight-color:transparent;touch-act
 @media(max-width:640px){.edit-machine-fields{grid-template-columns:1fr}.edit-machine-form{padding:16px}}
 
 /* Responsive layout refinements across phones, tablets, and wide screens. */
-html,body{width:100%;max-width:100%;overflow-x:clip}
-body{min-width:320px}
+html{width:100%;max-width:100%;overflow-x:clip}
+body{width:auto;max-width:100%;overflow-x:clip}
 .portal,.portal-main,.workspace,.landing,.landing main,.auth-layout{min-width:0;max-width:100%}
 img,video{max-width:100%}
 .workspace{padding-right:clamp(16px,3vw,44px);padding-left:clamp(16px,3vw,44px)}
@@ -1313,7 +1313,8 @@ img,video{max-width:100%}
 @keyframes public-menu-rise{from{opacity:0;transform:translateY(-9px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
 @media(min-width:761px){.public-menu-toggle{display:none}}
 
-html{scroll-padding-top:76px;scrollbar-gutter:stable both-edges}
+html{scroll-padding-top:76px;scrollbar-gutter:stable}
+@media(max-width:680px){html{scrollbar-gutter:auto}}
 button,a,input,select,textarea{-webkit-tap-highlight-color:transparent}
 button,.button,.nav-item,.filter-chip,.mobile-quick-nav-item,.public-menu-toggle{touch-action:manipulation}
 .page-heading h1,.section-heading h2,.about-hero-copy h1,.hero-content>h1{text-wrap:balance}
