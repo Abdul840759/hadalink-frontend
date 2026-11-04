@@ -1607,3 +1607,22 @@ button,.button,input,select,textarea{line-height:1.4}
 .farmer-home-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}
 .farmer-home-bookings{padding:18px}
 @media(max-width:680px){.farmer-home-metrics{grid-template-columns:1fr}.farmer-home-bookings{padding:14px}.farmer-home-actions>.button{flex:1 1 auto}}
+
+/* Keep listing filters in the document flow so they never cover equipment photos. */
+.farmer-filter-rail{position:static;height:auto;z-index:auto;justify-content:flex-end;margin:12px 0 14px;overflow:visible;pointer-events:auto}
+.farmer-filter-rail .farmer-filter-trigger{width:min(260px,100%);margin:0}
+@media(max-width:680px){
+ .farmer-filter-rail{position:static;top:auto;height:auto;justify-content:stretch;margin:10px 0 14px}
+ .farmer-filter-rail .farmer-filter-trigger{width:100%;min-height:44px;margin:0;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+}
+.edit-machine-photos{display:grid;gap:12px;margin:0 0 20px;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.edit-machine-photos>div:first-child{display:grid;gap:4px}
+.edit-machine-photos>div:first-child strong{font-size:12px}
+.edit-machine-photos>div:first-child small{color:var(--muted);font-size:10px;line-height:1.5}
+.edit-machine-photo-grid{display:flex;flex-wrap:wrap;gap:10px}
+.edit-machine-photo-grid figure,.edit-machine-photo-add{position:relative;display:grid;width:104px;height:82px;flex:none;place-items:center;overflow:hidden;margin:0;border:1px solid var(--line2);border-radius:9px;background:var(--card2)}
+.edit-machine-photo-grid figure img{width:100%;height:100%;object-fit:cover}
+.edit-machine-photo-grid figure button{position:absolute;top:5px;right:5px;display:grid;width:25px;height:25px;place-items:center;border:1px solid rgba(255,255,255,.5);border-radius:50%;background:rgba(7,20,12,.82);color:white}
+.edit-machine-photo-add{align-content:center;gap:5px;border-style:dashed;color:var(--green);cursor:pointer;font-size:10px;font-weight:700}
+.edit-machine-photo-add input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+@media(max-width:540px){.edit-machine-photos{padding:12px}.edit-machine-photo-grid figure,.edit-machine-photo-add{width:calc((100vw - 94px)/3);max-width:104px;height:76px}}
