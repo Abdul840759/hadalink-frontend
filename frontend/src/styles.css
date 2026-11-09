@@ -1625,6 +1625,11 @@ button,.button,input,select,textarea{line-height:1.4}
 .farmer-home-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}
 .farmer-home-bookings{padding:18px}
 @media(max-width:680px){.farmer-home-metrics{grid-template-columns:1fr}.farmer-home-bookings{padding:14px}.farmer-home-actions>.button{flex:1 1 auto}}
+:root[data-theme="light"] .farmer-home-hero h2{color:#f4f7ed}
+:root[data-theme="light"] .farmer-home-bookings .panel-head h2{color:#17271d}
+:root[data-theme="light"] .farmer-home-bookings .panel-head p{color:#687a6c}
+:root[data-theme="light"] .farmer-home-bookings .empty-state{color:#617365}
+:root[data-theme="light"] .farmer-home-bookings .empty-state>strong{color:#203729}
 
 /* Keep listing filters in the document flow so they never cover equipment photos. */
 .farmer-filter-rail{position:static;height:auto;z-index:auto;justify-content:flex-end;margin:12px 0 14px;overflow:visible;pointer-events:auto}
