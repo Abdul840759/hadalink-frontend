@@ -639,6 +639,11 @@ button,a,input,select,textarea{-webkit-tap-highlight-color:transparent;touch-act
 :root .mobile-quick-nav{position:relative;isolation:isolate;overflow:hidden;background:#0a1b12}
 :root .mobile-quick-nav::before{position:absolute;inset:-8px;z-index:-2;background:url('https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1400&q=80') center 48%/cover;filter:blur(4px);transform:scale(1.04);content:""}
 :root .mobile-quick-nav::after{position:absolute;inset:0;z-index:-1;background:rgba(4,20,12,.72);content:""}
+:root .mobile-quick-nav{isolation:auto;background:#0a1b12;border-bottom-color:#1b3928}
+:root .mobile-quick-nav::before,:root .mobile-quick-nav::after{display:none}
+:root .mobile-quick-nav-item{background:#0c2117;backdrop-filter:none}
+:root .mobile-quick-nav-item.active{background:#15543a}
+:root .mobile-quick-nav-item{text-transform:none;letter-spacing:.01em;font-size:11px}
 :root .mobile-quick-nav-item{background:rgba(7,28,17,.76);backdrop-filter:blur(5px)}
 :root .mobile-quick-nav-item.active{background:rgba(20,91,59,.78)}
 :root[data-theme="light"] .mobile-quick-nav{border-color:#cbd9ce}
