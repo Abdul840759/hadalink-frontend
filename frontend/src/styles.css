@@ -1220,6 +1220,14 @@ img,video{max-width:100%}
 .farmer-intro p{max-width:680px;margin:0;color:var(--muted);font-size:11px;line-height:1.7}
 .farmer-intro-note{display:flex;align-items:flex-start;gap:9px;max-width:260px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--muted);font-size:10px;line-height:1.6}
 .farmer-intro-note svg{flex:none;color:var(--green)}
+.farmer-home-hero{min-height:0;padding:clamp(24px,3.5vw,38px);border-color:#31543d;background:radial-gradient(ellipse at 88% 8%,rgba(40,151,104,.18),transparent 36%),linear-gradient(125deg,#10281b,#0b1d14 72%,#10251a)}
+.farmer-home-hero::before,.farmer-home-hero::after{display:none}
+.farmer-home-hero>div{position:relative;z-index:1;max-width:720px}
+.farmer-home-hero h2{max-width:680px;margin:13px 0 9px;font-size:clamp(25px,3.3vw,38px);letter-spacing:-.7px}
+.farmer-home-hero p{max-width:560px;font-size:13px;line-height:1.7;color:#b7cbbd}
+.farmer-home-hero .farmer-home-actions{margin-top:23px}
+.farmer-home-hero .button-ghost{border-color:rgba(196,220,201,.28);background:rgba(255,255,255,.035);color:#e4efe6}
+:root[data-theme="light"] .farmer-home-hero{border-color:#cbd9ce;background:radial-gradient(ellipse at 88% 8%,rgba(40,151,104,.12),transparent 36%),linear-gradient(125deg,#193d2a,#10291b 72%,#173925)}
 .farmer-market-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:0 0 15px}
 .farmer-market-filters .field{min-width:0}
 .farmer-market-filters .field-control select,.farmer-market-filters .field-control input,.farmer-booking-form .field-control select,.farmer-booking-form .field-control input,.farmer-review-form .field-control select,.farmer-review-form .field-control input{width:100%;min-width:0;height:100%;border:0;outline:0;background:transparent;color:var(--white);font:inherit}

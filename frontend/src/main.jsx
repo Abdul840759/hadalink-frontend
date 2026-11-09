@@ -650,7 +650,28 @@ function Dashboard({ go, machinesState, requestsState, flash, loading = false, e
 function FarmerHome({ machinesState, requestsState, go, user }) {
   const pending=requestsState.filter(item=>item.status==='Pending').length;
   const active=requestsState.filter(item=>['Pending','Accepted'].includes(item.status)).length;
-  return <div className="view-stack farmer-home"><section className="farmer-intro panel"><div><span className="eyebrow">FARMER WORKSPACE · PLATEAU STATE</span><h2>Welcome to your farm workspace</h2><p>Find local equipment, keep an eye on booking responses, and follow requests in one place.</p><div className="farmer-home-actions"><button className="button button-primary" onClick={()=>go('Find Machinery')}><Search size={15}/> Find machinery <ArrowRight size={14}/></button><button className="button button-ghost" onClick={()=>go('My bookings')}>My bookings <ArrowRight size={14}/></button></div></div><div className="farmer-intro-note"><ShieldCheck size={17}/><span>Requests are sent to providers for confirmation. Final terms are agreed directly.</span></div></section><section className="metric-grid farmer-home-metrics"><Metric label="AVAILABLE LISTINGS" value={String(machinesState.filter(item=>item.status==='Available').length)} detail={<><Tractor size={13}/> Equipment near you</>} icon={Tractor}/><Metric label="ACTIVE REQUESTS" value={String(active)} detail={<><MapPin size={13}/> Follow booking progress</>} icon={MapPin} tone="blue"/><Metric label="WAITING FOR PROVIDER" value={String(pending)} detail={<><Clock3 size={13}/> Requests awaiting response</>} icon={Clock3} tone="orange"/></section><section className="panel farmer-home-bookings"><PanelHead title="Recent bookings" subtitle={user?.name?`Requests made from ${user.name.split(/\s+/)[0]}’s account.`:'Your latest equipment requests.'} action={<button className="button button-ghost button-small" onClick={()=>go('My bookings')}>View bookings <ArrowRight size={13}/></button>}/>{requestsState.length?<div className="farmer-request-list">{requestsState.slice(0,3).map(request=><article className="farmer-request-row" key={request.id}><div><strong>{request.machine}</strong><span>{request.service} · {request.place} · {request.date}</span></div><span className={`table-status table-${request.status.toLowerCase()}`}><i/>{request.status}</span></article>)}</div>:<div className="empty-state"><CalendarDays size={20}/><strong>Your booking activity will appear here</strong><span>Start by browsing equipment available in your area.</span></div>}</section></div>;
+  return <div className="view-stack farmer-home">
+    <section className="farmer-intro farmer-home-hero panel">
+      <div>
+        <span className="eyebrow">FARMER WORKSPACE · PLATEAU STATE</span>
+        <h2>Find the right equipment for the work ahead.</h2>
+        <p>Browse local machinery, request the dates you need, and keep your bookings in one place.</p>
+        <div className="farmer-home-actions">
+          <button className="button button-primary" onClick={()=>go('Find Machinery')}><Search size={15}/> Find machinery <ArrowRight size={14}/></button>
+          <button className="button button-ghost" onClick={()=>go('My bookings')}>My bookings <ArrowRight size={14}/></button>
+        </div>
+      </div>
+    </section>
+    <section className="metric-grid farmer-home-metrics">
+      <Metric label="AVAILABLE LISTINGS" value={String(machinesState.filter(item=>item.status==='Available').length)} detail={<><Tractor size={13}/> Equipment near you</>} icon={Tractor}/>
+      <Metric label="ACTIVE REQUESTS" value={String(active)} detail={<><MapPin size={13}/> Follow booking progress</>} icon={MapPin} tone="blue"/>
+      <Metric label="WAITING FOR PROVIDER" value={String(pending)} detail={<><Clock3 size={13}/> Requests awaiting response</>} icon={Clock3} tone="orange"/>
+    </section>
+    <section className="panel farmer-home-bookings">
+      <PanelHead title="Recent bookings" subtitle={user?.name?`Requests made from ${user.name.split(/\s+/)[0]}’s account.`:'Your latest equipment requests.'} action={<button className="button button-ghost button-small" onClick={()=>go('My bookings')}>View bookings <ArrowRight size={13}/></button>}/>
+      {requestsState.length ? <div className="farmer-request-list">{requestsState.slice(0,3).map(request=><article className="farmer-request-row" key={request.id}><div><strong>{request.machine}</strong><span>{request.service} · {request.place} · {request.date}</span></div><span className={`table-status table-${request.status.toLowerCase()}`}><i/>{request.status}</span></article>)}</div> : <div className="empty-state"><CalendarDays size={20}/><strong>Your booking activity will appear here</strong><span>Start by browsing equipment available in your area.</span></div>}
+    </section>
+  </div>;
 }
 
 function FarmerDashboard({ machinesState, requestsState, setRequestsState, loading = false, error = '' }) {
