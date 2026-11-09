@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { createHash } from 'node:crypto';
 import { Equipment, equipmentCategories } from '../models/index.js';
 import { mongoose } from '../config/database.js';
 import requireAuth from '../middleware/requireAuth.js';
@@ -157,6 +158,37 @@ router.patch('/:id', requireAuth, requireDatabase, async (request, response) => 
   }, { new: true, runValidators: true }).lean();
   if (!item) return response.status(404).json({ error: 'Equipment listing not found in your account.' });
   return response.json({ data: item });
+});
+
+router.patch('/:id/status', requireAuth, requireDatabase, async (request, response) => {
+  if (request.user.role !== 'provider') return response.status(403).json({ error: 'Only providers can change equipment listing status.' });
+  if (!mongoose.isValidObjectId(request.params.id)) return response.status(400).json({ error: 'Invalid equipment id.' });
+  const status = String(request.body?.status || '').toLowerCase();
+  if (!['available', 'paused'].includes(status)) return response.status(400).json({ error: 'Choose a valid listing status.' });
+  const item = await Equipment.findOneAndUpdate({ _id: request.params.id, provider: request.user._id }, { $set: { status } }, { new: true, runValidators: true }).lean();
+  if (!item) return response.status(404).json({ error: 'Equipment listing not found in your account.' });
+  return response.json({ data: item });
+});
+
+router.delete('/:id', requireAuth, requireDatabase, async (request, response) => {
+  if (request.user.role !== 'provider') return response.status(403).json({ error: 'Only providers can remove equipment listings.' });
+  if (!mongoose.isValidObjectId(request.params.id)) return response.status(400).json({ error: 'Invalid equipment id.' });
+  const item = await Equipment.findOne({ _id: request.params.id, provider: request.user._id });
+  if (!item) return response.status(404).json({ error: 'Equipment listing not found in your account.' });
+  await item.deleteOne();
+  const { CLOUDINARY_CLOUD_NAME: cloudName, CLOUDINARY_API_KEY: apiKey, CLOUDINARY_API_SECRET: apiSecret } = process.env;
+  if (cloudName && apiKey && apiSecret) {
+    await Promise.allSettled((item.images || []).map(async image => {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const signature = createHash('sha1').update(`public_id=${image.publicId}&timestamp=${timestamp}${apiSecret}`).digest('hex');
+      const result = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/destroy`, {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ public_id: image.publicId, timestamp: String(timestamp), api_key: apiKey, signature }),
+      });
+      if (!result.ok) console.error('[cloudinary] Could not remove equipment image:', image.publicId, result.status);
+    }));
+  }
+  return response.status(204).end();
 });
 
 router.get('/:id', requireDatabase, async (request, response) => {

@@ -11,7 +11,7 @@ const requireDatabase = (_request, response, next) => mongoose.connection.readyS
 router.get('/', requireAuth, requireDatabase, async (request, response) => {
   const filter = request.user.role === 'provider' ? { provider: request.user._id } : { farmer: request.user._id };
   const items = await BookingRequest.find(filter).sort({ createdAt: -1 })
-    .populate('farmer', 'name profile.phone profile.whatsapp')
+    .populate('farmer', 'name email profile.phone profile.whatsapp')
     .populate('provider', 'name profile.businessName profile.phone profile.whatsapp')
     .populate('equipment', 'name category images location rate services operatorArrangement')
     .lean();
@@ -50,12 +50,38 @@ router.patch('/:id/status', requireAuth, requireDatabase, async (request, respon
   if (!mongoose.isValidObjectId(request.params.id)) return response.status(400).json({ error: 'Invalid booking request id.' });
   const status = String(request.body?.status || '').toLowerCase();
   if (!['accepted', 'declined', 'completed'].includes(status)) return response.status(400).json({ error: 'Choose a valid booking status.' });
+  const current = await BookingRequest.findOne({ _id: request.params.id, provider: request.user._id }).select('status');
+  if (!current) return response.status(404).json({ error: 'Booking request not found in your account.' });
+  const allowedNext = current.status === 'pending' ? ['accepted', 'declined'] : current.status === 'accepted' ? ['completed'] : [];
+  if (!allowedNext.includes(status)) return response.status(409).json({ error: 'This booking can no longer be moved to that status.' });
   const item = await BookingRequest.findOneAndUpdate(
-    { _id: request.params.id, provider: request.user._id },
+    { _id: request.params.id, provider: request.user._id, status: current.status },
     { $set: { status, ...(status === 'completed' ? { completedAt: new Date() } : {}) } },
     { new: true, runValidators: true },
-  ).populate('farmer', 'name').populate('equipment', 'name').lean();
+  ).populate('farmer', 'name email profile.phone profile.whatsapp').populate('provider', 'name profile.businessName').populate('equipment', 'name category images location rate services operatorArrangement').lean();
   if (!item) return response.status(404).json({ error: 'Booking request not found in your account.' });
+  return response.json({ data: item });
+});
+
+router.post('/:id/review', requireAuth, requireDatabase, async (request, response) => {
+  if (request.user.role !== 'farmer') return response.status(403).json({ error: 'Only farmers can review completed bookings.' });
+  if (!mongoose.isValidObjectId(request.params.id)) return response.status(400).json({ error: 'Invalid booking request id.' });
+  const rating = Number(request.body?.rating);
+  const text = String(request.body?.text || '').trim();
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5 || text.length < 3 || text.length > 2000) {
+    return response.status(400).json({ error: 'Choose a 1–5 star rating and write a review of at least 3 characters.' });
+  }
+  const item = await BookingRequest.findOneAndUpdate(
+    { _id: request.params.id, farmer: request.user._id, status: 'completed', 'review.rating': { $exists: false } },
+    { $set: { 'review.rating': rating, 'review.text': text, 'review.submittedAt': new Date() } },
+    { new: true, runValidators: true },
+  ).populate('farmer', 'name email').populate('provider', 'name profile.businessName').populate('equipment', 'name category images location rate services operatorArrangement').lean();
+  if (!item) {
+    const existing = await BookingRequest.findOne({ _id: request.params.id, farmer: request.user._id }).select('status review.rating');
+    if (!existing) return response.status(404).json({ error: 'Booking not found in your account.' });
+    if (existing.status !== 'completed') return response.status(409).json({ error: 'You can review a booking after it has been marked complete.' });
+    return response.status(409).json({ error: 'A review has already been submitted for this booking.' });
+  }
   return response.json({ data: item });
 });
 

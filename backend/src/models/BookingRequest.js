@@ -13,6 +13,11 @@ const bookingRequestSchema = new mongoose.Schema({
   status: { type: String, enum: ['pending', 'accepted', 'declined', 'completed', 'cancelled'], default: 'pending', index: true },
   providerResponse: { type: String, trim: true, maxlength: 1000 },
   completedAt: { type: Date },
+  review: {
+    rating: { type: Number, min: 1, max: 5 },
+    text: { type: String, trim: true, maxlength: 2000 },
+    submittedAt: { type: Date },
+  },
 }, { timestamps: true, versionKey: false });
 
 bookingRequestSchema.index({ provider: 1, status: 1, createdAt: -1 });

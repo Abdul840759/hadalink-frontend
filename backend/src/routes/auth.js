@@ -249,13 +249,17 @@ router.patch('/profile/avatar', requireAuth, async (request, response) => {
   return response.json({ data: { user: publicUser(request.user) } });
 });
 router.patch('/profile', requireAuth, async (request, response) => {
-  const allowedFields = ['phone', 'whatsapp', 'businessName', 'primaryArea'];
-  const updates = Object.fromEntries(allowedFields
-    .filter(field => Object.hasOwn(request.body || {}, field))
-    .map(field => [field, String(request.body[field] || '').trim()]));
+  const allowedFields = ['phone', 'whatsapp', 'businessName', 'primaryArea', 'serviceAreas'];
+  const updates = Object.fromEntries(allowedFields.filter(field => Object.hasOwn(request.body || {}, field)).map(field => [field,
+    field === 'serviceAreas'
+      ? [...new Set((Array.isArray(request.body[field]) ? request.body[field] : []).map(value => String(value).trim()).filter(Boolean))].slice(0, 10)
+      : String(request.body[field] || '').trim(),
+  ]));
   if (!Object.keys(updates).length) return response.status(400).json({ error: 'Add at least one profile detail.' });
   const maxLengths = { phone: 32, whatsapp: 32, businessName: 140, primaryArea: 120 };
-  if (Object.entries(updates).some(([field, value]) => value.length > maxLengths[field])) return response.status(400).json({ error: 'One or more profile details are too long.' });
+  if (Object.entries(updates).some(([field, value]) => field === 'serviceAreas'
+    ? value.length > 10 || value.some(area => area.length < 2 || area.length > 120)
+    : value.length > maxLengths[field])) return response.status(400).json({ error: 'One or more profile details are invalid or too long.' });
   for (const field of ['phone', 'whatsapp']) {
     if (Object.hasOwn(updates, field) && (updates[field].length < 7 || !/^[+\d()\s.-]+$/.test(updates[field]))) {
       return response.status(400).json({ error: `Enter a valid ${field === 'phone' ? 'phone' : 'WhatsApp'} number.` });
