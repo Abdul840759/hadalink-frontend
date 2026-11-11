@@ -66,7 +66,7 @@ router.post('/register', codeLimiter, async (request, response) => {
   const password = request.body.password;
   const role = String(request.body.role || '').toLowerCase();
 
-  if (name.length < 2 || name.length > 120 || !emailPattern.test(email) || !passwordIsValid(password) || !['farmer', 'provider'].includes(role)) {
+  if (name.length < 2 || name.length > 120 || !emailPattern.test(email) || !passwordIsValid(password) || !['farmer', 'provider', 'logistics'].includes(role)) {
     return response.status(400).json({ error: 'Enter a valid name, email, password (8–72 characters), and account type.' });
   }
   if (await User.exists({ email })) return response.status(409).json({ error: 'An account with this email already exists. Sign in instead.' });
@@ -189,7 +189,7 @@ router.post('/google', authLimiter, async (request, response) => {
       await user.save();
     } else {
       const role = String(request.body.role || '').toLowerCase();
-      if (!['farmer', 'provider'].includes(role)) return response.status(400).json({ error: 'Choose farmer or provider for this account.' });
+      if (!['farmer', 'provider', 'logistics'].includes(role)) return response.status(400).json({ error: 'Choose farmer, equipment provider, or logistics provider for this account.' });
       user = await User.create({
         email,
         emailVerified: true,
@@ -249,23 +249,23 @@ router.patch('/profile/avatar', requireAuth, async (request, response) => {
   return response.json({ data: { user: publicUser(request.user) } });
 });
 router.patch('/profile', requireAuth, async (request, response) => {
-  const allowedFields = ['phone', 'whatsapp', 'businessName', 'primaryArea', 'serviceAreas'];
+  const allowedFields = ['phone', 'whatsapp', 'businessName', 'contactName', 'primaryArea', 'serviceAreas', 'transportLoads', 'transportCapacity', 'vehicleDetails'];
   const updates = Object.fromEntries(allowedFields.filter(field => Object.hasOwn(request.body || {}, field)).map(field => [field,
-    field === 'serviceAreas'
+    ['serviceAreas', 'transportLoads'].includes(field)
       ? [...new Set((Array.isArray(request.body[field]) ? request.body[field] : []).map(value => String(value).trim()).filter(Boolean))].slice(0, 10)
       : String(request.body[field] || '').trim(),
   ]));
   if (!Object.keys(updates).length) return response.status(400).json({ error: 'Add at least one profile detail.' });
-  const maxLengths = { phone: 32, whatsapp: 32, businessName: 140, primaryArea: 120 };
-  if (Object.entries(updates).some(([field, value]) => field === 'serviceAreas'
-    ? value.length > 10 || value.some(area => area.length < 2 || area.length > 120)
+  const maxLengths = { phone: 32, whatsapp: 32, businessName: 140, contactName: 120, primaryArea: 120, transportCapacity: 160, vehicleDetails: 240 };
+  if (Object.entries(updates).some(([field, value]) => ['serviceAreas', 'transportLoads'].includes(field)
+    ? value.length > 10 || value.some(area => area.length < 2 || area.length > (field === 'transportLoads' ? 80 : 120))
     : value.length > maxLengths[field])) return response.status(400).json({ error: 'One or more profile details are invalid or too long.' });
   for (const field of ['phone', 'whatsapp']) {
     if (Object.hasOwn(updates, field) && (updates[field].length < 7 || !/^[+\d()\s.-]+$/.test(updates[field]))) {
       return response.status(400).json({ error: `Enter a valid ${field === 'phone' ? 'phone' : 'WhatsApp'} number.` });
     }
   }
-  for (const field of ['businessName', 'primaryArea']) {
+  for (const field of ['businessName', 'contactName', 'primaryArea']) {
     if (Object.hasOwn(updates, field) && updates[field].length < 2) {
       return response.status(400).json({ error: `Enter your ${field === 'businessName' ? 'business or fleet name' : 'operating area'}.` });
     }

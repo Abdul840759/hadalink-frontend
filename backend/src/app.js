@@ -5,6 +5,7 @@ import authRouter from './routes/auth.js';
 import equipmentRouter from './routes/equipment.js';
 import bookingsRouter from './routes/bookings.js';
 import healthRouter from './routes/health.js';
+import transportRouter from './routes/transport.js';
 
 const app = express();
 // Render terminates TLS and forwards requests through one trusted proxy.
@@ -32,6 +33,7 @@ app.use('/api/health', healthRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/equipment', equipmentRouter);
 app.use('/api/bookings', bookingsRouter);
+app.use('/api/transport', transportRouter);
 
 app.use((_request, response) => {
   response.status(404).json({ error: 'Route not found' });

@@ -18,6 +18,19 @@ const bookingRequestSchema = new mongoose.Schema({
     text: { type: String, trim: true, maxlength: 2000 },
     submittedAt: { type: Date },
   },
+  transport: {
+    requested: { type: Boolean, default: false, index: true },
+    fee: { type: Number, min: 0 },
+    status: { type: String, enum: ['not_requested', 'requested', 'accepted', 'scheduled', 'picked_up', 'in_transit', 'delivered', 'cancelled', 'unfulfilled'], default: 'not_requested', index: true },
+    provider: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
+    declinedBy: { type: [mongoose.Schema.Types.ObjectId], default: [] },
+    scheduledAt: { type: Date },
+    pickedUpAt: { type: Date },
+    inTransitAt: { type: Date },
+    deliveredAt: { type: Date },
+    deliveryNote: { type: String, trim: true, maxlength: 1000 },
+    requirements: { type: String, trim: true, maxlength: 1000 },
+  },
 }, { timestamps: true, versionKey: false });
 
 bookingRequestSchema.index({ provider: 1, status: 1, createdAt: -1 });

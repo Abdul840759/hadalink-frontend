@@ -1628,6 +1628,69 @@ button,.button,input,select,textarea{line-height:1.4}
 :root[data-theme="light"] .farmer-home-hero h2{color:#f4f7ed}
 :root[data-theme="light"] .farmer-home-bookings .panel-head h2{color:#17271d}
 :root[data-theme="light"] .farmer-home-bookings .panel-head p{color:#687a6c}
+
+/* Logistics provider workspace */
+.logistics-welcome{display:grid;justify-items:start;gap:10px;padding:clamp(22px,4vw,34px);background:radial-gradient(ellipse at 85% 15%,rgba(34,184,121,.12),transparent 40%),var(--panel,#10281d)}
+.logistics-welcome h2{margin:0;font-size:clamp(23px,3vw,32px);line-height:1.18}
+.logistics-welcome p{max-width:650px;margin:0;color:var(--muted,#97aa9d);font-size:13px;line-height:1.65}
+.logistics-metrics{grid-template-columns:repeat(4,minmax(0,1fr))}
+.transport-list{display:grid;gap:12px}
+.transport-card{display:grid;gap:18px;padding:clamp(16px,2.5vw,22px)}
+.transport-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.transport-card-head h3{margin:6px 0 4px;font-size:17px}
+.transport-card-head p{margin:0;color:var(--muted,#97aa9d);font-size:12px}
+.transport-ref{color:var(--accent,#eaaa28);font-size:9px;font-weight:800;letter-spacing:.12em}
+.transport-card-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.transport-card-grid>div{display:grid;gap:5px;min-width:0;padding:12px;border:1px solid var(--line,#31513b);border-radius:12px;background:rgba(8,26,16,.22)}
+.transport-card-grid small{color:var(--muted,#97aa9d);font-size:10px}
+.transport-card-grid strong{overflow-wrap:anywhere;font-size:12px}
+.transport-fee{color:var(--accent,#eaaa28)!important;white-space:nowrap}
+.transport-note{display:grid;gap:5px;margin:0;padding:12px 14px;border-left:2px solid var(--accent,#eaaa28);border-radius:0 10px 10px 0;background:rgba(234,170,40,.07);color:var(--muted,#97aa9d);font-size:12px;line-height:1.55}
+.transport-note strong{color:var(--text,#e8f0e9);font-size:10px;text-transform:uppercase;letter-spacing:.06em}
+.transport-card-actions{display:flex;justify-content:flex-end;align-items:center;gap:9px;flex-wrap:wrap}
+.transport-job-actions textarea{flex:1 1 260px;min-width:min(100%,240px)}
+.transport-updated{margin-right:auto;color:var(--muted,#97aa9d);font-size:11px}
+.transport-list-section,.logistics-profile-card{padding:clamp(16px,2.5vw,22px)}
+.transport-update-row{display:flex;align-items:center;gap:12px;padding:13px;border:1px solid var(--line,#31513b);border-radius:13px}
+.transport-update-row>div{display:grid;gap:4px;min-width:0;flex:1}
+.transport-update-row strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.transport-update-row small{color:var(--muted,#97aa9d);font-size:10px}
+.logistics-shortcut{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:20px}
+.logistics-shortcut h3{margin:0 0 5px;font-size:14px}
+.logistics-shortcut p{margin:0;color:var(--muted,#97aa9d);font-size:12px;line-height:1.5}
+.logistics-profile-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:18px}
+.logistics-profile-form>.settings-actions,.logistics-profile-form>.settings-help,.logistics-verification{grid-column:1/-1}
+.logistics-verification{display:flex;align-items:center;gap:9px;padding:12px;border:1px solid var(--line,#31513b);border-radius:12px;color:var(--muted,#97aa9d);font-size:11px}
+.logistics-verification svg{color:#28cc8b;flex:none}
+.logistics-verification strong{margin-left:auto;color:var(--accent,#eaaa28);font-size:10px}
+.transport-choice{grid-column:1/-1;display:grid;gap:10px;padding:14px;border:1px solid var(--line,#31513b);border-radius:14px;background:rgba(12,40,25,.38)}
+.transport-choice>div{display:grid;gap:4px}
+.transport-choice>div strong{font-size:13px}
+.transport-choice>div small,.transport-choice>p{margin:0;color:var(--muted,#97aa9d);font-size:11px;line-height:1.5}
+.transport-choice>label{display:flex;align-items:center;gap:9px;min-height:38px}
+.transport-choice>label input{width:17px;height:17px;accent-color:#28cc8b}
+.transport-choice>label span{font-size:12px}
+.transport-choice>label b{margin-left:auto;color:var(--accent,#eaaa28);font-size:13px}
+.transport-choice>textarea{width:100%;box-sizing:border-box}
+@media(max-width:860px){.logistics-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.transport-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.logistics-metrics,.logistics-profile-form{grid-template-columns:1fr}.transport-card-head{flex-direction:column}.transport-card-grid{grid-template-columns:1fr 1fr;gap:8px}.transport-card-grid>div{padding:10px}.transport-card-actions{justify-content:stretch}.transport-card-actions>.button{flex:1}.transport-job-actions .transport-updated{flex-basis:100%}.logistics-shortcut{align-items:flex-start;flex-direction:column}.logistics-shortcut>.button{width:100%}.logistics-verification{flex-wrap:wrap}.logistics-verification strong{margin-left:auto}}
+
+/* Transport progress stays readable in narrow farmer booking and tracking cards. */
+.farmer-transport-status,.farmer-transport-tracking{display:flex;align-items:flex-start;gap:10px;margin-top:12px;padding:12px 14px;border:1px solid var(--line2);border-radius:12px;background:linear-gradient(135deg,rgba(42,211,148,.08),rgba(13,35,24,.72));color:var(--green)}
+.farmer-transport-status>span{display:grid;gap:4px;min-width:0;flex:1}
+.farmer-transport-status strong,.farmer-transport-tracking-head strong{color:var(--white);font-size:12px}
+.farmer-transport-status small,.farmer-transport-tracking small{color:var(--muted);line-height:1.5}
+.farmer-transport-status>b{color:var(--yellow);white-space:nowrap;font-size:12px}
+.farmer-transport-tracking{display:block;color:var(--white)}
+.farmer-transport-tracking-head{display:flex;align-items:center;gap:9px;color:var(--green)}
+.farmer-transport-tracking-head .table-status{margin-left:auto}
+.farmer-transport-tracking>small{display:block;margin-top:9px}
+.transport-progress-steps{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;margin-top:15px}
+.transport-progress-steps>span{display:grid;justify-items:center;gap:6px;color:var(--muted);font-size:10px;text-align:center}
+.transport-progress-steps i{width:20px;height:20px;display:grid;place-items:center;border:1px solid var(--line2);border-radius:50%;color:#07160f;font-style:normal}
+.transport-progress-steps .complete i{border-color:var(--green);background:var(--green)}
+.transport-progress-steps .complete{color:var(--white)}
+@media(max-width:600px){.farmer-transport-status{padding:10px}.farmer-transport-status>b{font-size:11px}.transport-progress-steps{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:12px}.transport-progress-steps>span{font-size:9px}}
 :root[data-theme="light"] .farmer-home-bookings .empty-state{color:#617365}
 :root[data-theme="light"] .farmer-home-bookings .empty-state>strong{color:#203729}
 
