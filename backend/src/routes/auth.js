@@ -3,8 +3,9 @@ import bcrypt from 'bcryptjs';
 import { OAuth2Client } from 'google-auth-library';
 import { rateLimit } from 'express-rate-limit';
 import { Router } from 'express';
-import { EmailCode, User } from '../models/index.js';
+import { EmailCode, Session, User } from '../models/index.js';
 import requireAuth from '../middleware/requireAuth.js';
+import requireTurnstile from '../middleware/requireTurnstile.js';
 import { sendEmailCode } from '../services/email.js';
 import { createSession, destroySession, publicUser } from '../services/sessions.js';
 
@@ -13,7 +14,8 @@ const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHea
 const codeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false });
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const normalizeEmail = value => String(value || '').trim().toLowerCase();
-const passwordIsValid = value => typeof value === 'string' && value.length >= 8 && Buffer.byteLength(value, 'utf8') <= 72;
+const commonPasswords = new Set(['password1234', 'password12345', 'qwerty123456', '123456789012', 'letmein12345', 'welcome12345']);
+const passwordIsValid = value => typeof value === 'string' && value.length >= 12 && Buffer.byteLength(value, 'utf8') <= 72 && !commonPasswords.has(value.toLowerCase());
 
 function codeDigest(email, purpose, code) {
   const secret = process.env.CODE_HASH_SECRET || process.env.SESSION_SECRET;
@@ -60,14 +62,14 @@ async function sendCode({ email, name, purpose, pendingName, pendingRole, pendin
   }
 }
 
-router.post('/register', codeLimiter, async (request, response) => {
+router.post('/register', codeLimiter, requireTurnstile, async (request, response) => {
   const name = String(request.body.name || '').trim();
   const email = normalizeEmail(request.body.email);
   const password = request.body.password;
   const role = String(request.body.role || '').toLowerCase();
 
   if (name.length < 2 || name.length > 120 || !emailPattern.test(email) || !passwordIsValid(password) || !['farmer', 'provider', 'logistics'].includes(role)) {
-    return response.status(400).json({ error: 'Enter a valid name, email, password (8–72 characters), and account type.' });
+    return response.status(400).json({ error: 'Enter a valid name, email, account type, and a password with at least 12 characters (maximum 72 bytes). Avoid common passwords.' });
   }
   if (await User.exists({ email })) return response.status(409).json({ error: 'An account with this email already exists. Sign in instead.' });
 
@@ -76,7 +78,7 @@ router.post('/register', codeLimiter, async (request, response) => {
   return response.status(202).json({ message: 'A verification code has been sent to your email.' });
 });
 
-router.post('/verify-email', authLimiter, async (request, response) => {
+router.post('/verify-email', authLimiter, requireTurnstile, async (request, response) => {
   const email = normalizeEmail(request.body.email);
   const code = String(request.body.code || '').trim();
   if (!emailPattern.test(email) || !/^\d{6}$/.test(code)) return response.status(400).json({ error: 'Enter the email and six-digit code.' });
@@ -108,7 +110,7 @@ router.post('/verify-email', authLimiter, async (request, response) => {
   return response.status(201).json({ data: { user: publicUser(user) } });
 });
 
-router.post('/login', authLimiter, async (request, response) => {
+router.post('/login', authLimiter, requireTurnstile, async (request, response) => {
   const email = normalizeEmail(request.body.email);
   const password = request.body.password;
   if (!emailPattern.test(email) || typeof password !== 'string') return response.status(400).json({ error: 'Enter a valid email and password.' });
@@ -123,7 +125,7 @@ router.post('/login', authLimiter, async (request, response) => {
   return response.json({ data: { user: publicUser(user) } });
 });
 
-router.post('/forgot-password', codeLimiter, async (request, response) => {
+router.post('/forgot-password', codeLimiter, requireTurnstile, async (request, response) => {
   const email = normalizeEmail(request.body.email);
   if (!emailPattern.test(email)) return response.status(400).json({ error: 'Enter a valid email address.' });
 
@@ -132,12 +134,12 @@ router.post('/forgot-password', codeLimiter, async (request, response) => {
   return response.json({ message: 'If an account uses that email, a reset code has been sent.' });
 });
 
-router.post('/reset-password', authLimiter, async (request, response) => {
+router.post('/reset-password', authLimiter, requireTurnstile, async (request, response) => {
   const email = normalizeEmail(request.body.email);
   const code = String(request.body.code || '').trim();
   const password = request.body.password;
   if (!emailPattern.test(email) || !/^\d{6}$/.test(code) || !passwordIsValid(password)) {
-    return response.status(400).json({ error: 'Enter the email, six-digit code, and a password of at least 8 characters.' });
+    return response.status(400).json({ error: 'Enter the email, six-digit code, and a password with at least 12 characters (maximum 72 bytes). Avoid common passwords.' });
   }
 
   const challenge = await EmailCode.findOne({ email, purpose: 'password-reset', consumedAt: null, expiresAt: { $gt: new Date() } });
@@ -156,11 +158,12 @@ router.post('/reset-password', authLimiter, async (request, response) => {
   if (!user) return response.status(400).json({ error: 'That code is invalid or has expired. Request a new one.' });
   user.passwordHash = await bcrypt.hash(password, 12);
   await user.save();
+  await Session.deleteMany({ user: user._id });
   await EmailCode.deleteMany({ email, purpose: 'password-reset' });
   return response.json({ message: 'Password updated. You can now sign in.' });
 });
 
-router.post('/google', authLimiter, async (request, response) => {
+router.post('/google', authLimiter, requireTurnstile, async (request, response) => {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   if (!clientId) return response.status(503).json({ error: 'Google sign-in is not configured.' });
   const credential = request.body.credential;

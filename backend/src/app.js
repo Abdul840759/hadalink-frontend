@@ -1,6 +1,7 @@
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import express from 'express';
+import helmet from 'helmet';
 import authRouter from './routes/auth.js';
 import equipmentRouter from './routes/equipment.js';
 import bookingsRouter from './routes/bookings.js';
@@ -10,6 +11,7 @@ import transportRouter from './routes/transport.js';
 const app = express();
 // Render terminates TLS and forwards requests through one trusted proxy.
 app.set('trust proxy', 1);
+app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 const allowedOrigins = (process.env.FRONTEND_ORIGIN || 'http://localhost:5173')
   .split(',')
   .map(origin => origin.trim())

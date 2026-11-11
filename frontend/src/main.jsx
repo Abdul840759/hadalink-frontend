@@ -494,11 +494,15 @@ function AuthPage({ page, go, initialRole = 'Farmer', theme, toggleTheme }) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [code, setCode] = useState('');
+  const [turnstileToken, setTurnstileToken] = useState('');
   const [stage, setStage] = useState('details');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const googleButtonRef = React.useRef(null);
   const googleCallbackRef = React.useRef(null);
+  const turnstileRef = React.useRef(null);
+  const turnstileWidgetRef = React.useRef(null);
+  const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
   const register = page === 'register';
   const forgot = page === 'forgot';
   const verificationStage = register && stage === 'verify';
@@ -511,31 +515,76 @@ function AuthPage({ page, go, initialRole = 'Farmer', theme, toggleTheme }) {
 
   const completeSignIn = (accountRole = register ? role : initialRole) => go('Dashboard', accountRole);
 
+  React.useEffect(() => {
+    if (!turnstileSiteKey || !turnstileRef.current) return undefined;
+    let cancelled = false;
+    let widgetId;
+    const renderWidget = () => {
+      if (cancelled || !window.turnstile || !turnstileRef.current) return;
+      turnstileRef.current.replaceChildren();
+      widgetId = window.turnstile.render(turnstileRef.current, {
+        sitekey: turnstileSiteKey,
+        action: 'auth',
+        theme: theme === 'dark' ? 'dark' : 'light',
+        callback: token => setTurnstileToken(token),
+        'expired-callback': () => setTurnstileToken(''),
+        'error-callback': () => setTurnstileToken(''),
+      });
+      turnstileWidgetRef.current = widgetId;
+    };
+    let script = document.querySelector('script[data-cloudflare-turnstile]');
+    if (!script) {
+      script = document.createElement('script');
+      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+      script.async = true;
+      script.defer = true;
+      script.dataset.cloudflareTurnstile = 'true';
+      document.head.appendChild(script);
+    }
+    if (window.turnstile) renderWidget();
+    else script.addEventListener('load', renderWidget);
+    return () => {
+      cancelled = true;
+      script?.removeEventListener('load', renderWidget);
+      if (widgetId !== undefined) window.turnstile?.remove(widgetId);
+      turnstileWidgetRef.current = null;
+      setTurnstileToken('');
+    };
+  }, [turnstileSiteKey, page, verificationStage, resetStage, theme]);
+
   async function submitAccount(event) {
     event.preventDefault();
     setBusy(true);
     setError('');
     try {
+      if (turnstileSiteKey && !turnstileToken) throw new Error('Complete the security check first.');
+      const security = turnstileSiteKey ? { turnstileToken } : {};
       if (register && !verificationStage) {
         if (password !== confirmPassword) throw new Error('Your passwords do not match.');
-        await authRequest('/auth/register', { name, email, password, role: role.toLowerCase() });
+        await authRequest('/auth/register', { name, email, password, role: role.toLowerCase(), ...security });
+        setTurnstileToken('');
         setStage('verify');
       } else if (verificationStage) {
-        await authRequest('/auth/verify-email', { email, code });
+        await authRequest('/auth/verify-email', { email, code, ...security });
         completeSignIn();
       } else if (forgot && !resetStage) {
-        await authRequest('/auth/forgot-password', { email });
+        await authRequest('/auth/forgot-password', { email, ...security });
+        setTurnstileToken('');
         setStage('reset');
       } else if (resetStage) {
-        await authRequest('/auth/reset-password', { email, code, password });
+        await authRequest('/auth/reset-password', { email, code, password, ...security });
         go('login');
       } else {
-        const {data} = await authRequest('/auth/login', { email, password });
+        const {data} = await authRequest('/auth/login', { email, password, ...security });
         completeSignIn(data?.user?.role === 'logistics' ? 'Logistics' : data?.user?.role === 'provider' ? 'Provider' : 'Farmer');
       }
     } catch (requestError) {
       setError(requestError.message);
     } finally {
+      if (turnstileSiteKey) {
+        setTurnstileToken('');
+        if (turnstileWidgetRef.current !== null) window.turnstile?.reset(turnstileWidgetRef.current);
+      }
       setBusy(false);
     }
   }
@@ -548,11 +597,16 @@ function AuthPage({ page, go, initialRole = 'Farmer', theme, toggleTheme }) {
     setBusy(true);
     setError('');
     try {
-      await authRequest('/auth/google', { credential, role: role.toLowerCase() });
+      if (turnstileSiteKey && !turnstileToken) throw new Error('Complete the security check first.');
+      await authRequest('/auth/google', { credential, role: role.toLowerCase(), ...(turnstileSiteKey ? { turnstileToken } : {}) });
       completeSignIn();
     } catch (requestError) {
       setError(requestError.message);
     } finally {
+      if (turnstileSiteKey) {
+        setTurnstileToken('');
+        if (turnstileWidgetRef.current !== null) window.turnstile?.reset(turnstileWidgetRef.current);
+      }
       setBusy(false);
     }
   }
@@ -604,11 +658,19 @@ function AuthPage({ page, go, initialRole = 'Farmer', theme, toggleTheme }) {
     setBusy(true);
     setError('');
     try {
-      if (register) await authRequest('/auth/register', { name, email, password, role: role.toLowerCase() });
-      else await authRequest('/auth/forgot-password', { email });
+      if (turnstileSiteKey && !turnstileToken) throw new Error('Complete the security check first.');
+      const security = turnstileSiteKey ? { turnstileToken } : {};
+      if (register) await authRequest('/auth/register', { name, email, password, role: role.toLowerCase(), ...security });
+      else await authRequest('/auth/forgot-password', { email, ...security });
+      setTurnstileToken('');
+      if (turnstileWidgetRef.current !== null) window.turnstile?.reset(turnstileWidgetRef.current);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
+      if (turnstileSiteKey) {
+        setTurnstileToken('');
+        if (turnstileWidgetRef.current !== null) window.turnstile?.reset(turnstileWidgetRef.current);
+      }
       setBusy(false);
     }
   }
@@ -617,8 +679,14 @@ function AuthPage({ page, go, initialRole = 'Farmer', theme, toggleTheme }) {
     {register && !verificationStage && <Field icon={User} label="FULL NAME" placeholder="Enter your full name" value={name} onChange={event => setName(event.target.value)} required />}
     {(!verificationStage && !resetStage) && <Field icon={Mail} label="EMAIL ADDRESS" type="email" placeholder={page === 'login' ? 'you@example.com' : 'Enter your email'} value={email} onChange={event => setEmail(event.target.value)} required />}
     {(verificationStage || resetStage) && <Field icon={ShieldCheck} label="EMAIL CODE" inputMode="numeric" autoComplete="one-time-code" placeholder="Enter the 6-digit code" value={code} onChange={event => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))} required />}
-    {(!forgot && !verificationStage || resetStage) && <Field icon={LockKeyhole} label={resetStage ? 'NEW PASSWORD' : 'PASSWORD'} type={show ? 'text' : 'password'} placeholder={resetStage ? 'Choose a new password' : 'Enter your password'} value={password} onChange={event => setPassword(event.target.value)} required minLength={8} trailing={!resetStage && <button type="button" aria-label={show ? 'Hide password' : 'Show password'} onClick={() => setShow(value => !value)}>{show ? <EyeOff size={16} /> : <Eye size={16} />}</button>} />}
-    {register && !verificationStage && <Field icon={LockKeyhole} label="CONFIRM PASSWORD" type="password" placeholder="Confirm your password" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} required minLength={8} />}
+    {(!forgot && !verificationStage || resetStage) && (
+      <>
+        <Field icon={LockKeyhole} label={resetStage ? 'NEW PASSWORD' : 'PASSWORD'} type={show ? 'text' : 'password'} autoComplete={page === 'login' ? 'current-password' : 'new-password'} placeholder={resetStage ? 'Choose a new password' : 'Enter your password'} value={password} onChange={event => setPassword(event.target.value)} required minLength={page === 'login' ? 1 : 12} maxLength={72} trailing={!resetStage && <button type="button" aria-label={show ? 'Hide password' : 'Show password'} onClick={() => setShow(value => !value)}>{show ? <EyeOff size={16} /> : <Eye size={16} />}</button>} />
+        {(register && !verificationStage || resetStage) && <small className="password-policy">Use at least 12 characters. A memorable phrase works well; avoid common passwords (maximum 72 bytes).</small>}
+      </>
+    )}
+    {register && !verificationStage && <Field icon={LockKeyhole} label="CONFIRM PASSWORD" type="password" autoComplete="new-password" placeholder="Confirm your password" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} required minLength={12} maxLength={72} />}
+    {turnstileSiteKey&&<div className="turnstile-wrap"><div ref={turnstileRef}/><small>Protected by Cloudflare Turnstile.</small></div>}
     {page === 'login' && <div className="auth-options"><label className="remember"><input type="checkbox" /> Remember me</label><button type="button" className="text-link" onClick={() => { setStage('email'); setError(''); go('forgot'); }}>Forgot password?</button></div>}
     {error && <div className="auth-error" role="alert">{error}</div>}
     <button className={`button ${page === 'login' ? 'button-harvest' : 'button-auth'} auth-submit`} type="submit" disabled={busy}>{busy ? 'Please wait…' : verificationStage ? 'Verify email' : resetStage ? 'Update password' : forgot ? 'Send reset code' : register ? 'Create account' : 'Log in'} {!busy && <ArrowRight size={17} />}</button>

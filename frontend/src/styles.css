@@ -1691,6 +1691,9 @@ button,.button,input,select,textarea{line-height:1.4}
 .transport-progress-steps .complete i{border-color:var(--green);background:var(--green)}
 .transport-progress-steps .complete{color:var(--white)}
 @media(max-width:600px){.farmer-transport-status{padding:10px}.farmer-transport-status>b{font-size:11px}.transport-progress-steps{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:12px}.transport-progress-steps>span{font-size:9px}}
+.password-policy{display:block;margin:-6px 0 12px 30px;color:var(--muted);font-size:11px;line-height:1.5}
+.turnstile-wrap{display:grid;justify-items:center;gap:5px;min-height:75px}
+.turnstile-wrap>small{color:var(--muted);font-size:10px}
 :root[data-theme="light"] .farmer-home-bookings .empty-state{color:#617365}
 :root[data-theme="light"] .farmer-home-bookings .empty-state>strong{color:#203729}
 
