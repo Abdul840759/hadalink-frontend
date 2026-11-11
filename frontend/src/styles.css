@@ -72,6 +72,7 @@
 .footer-bottom{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:52px;border-top:1px solid #1a3022;color:#718579;font-size:9px}
 .footer-bottom>span:last-child{display:flex;align-items:center;gap:6px}
 .footer-bottom svg{color:#57ca91}
+@media(min-width:1050px){.userflow-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.userflow-card{padding:clamp(20px,2vw,28px)}.userflow-card h3{font-size:clamp(18px,1.7vw,23px)}}
 @media(max-width:760px){.coverage-section,.faq-section{grid-template-columns:1fr;gap:28px}.stories-grid{grid-template-columns:1fr}.story-card{min-height:185px}.footer-main{grid-template-columns:repeat(2,minmax(0,1fr));gap:30px 22px}}
 @media(max-width:540px){.coverage-section,.stories-section,.faq-section{padding:56px 18px}.coverage-copy h2{font-size:34px}.coverage-areas{padding:18px}.footer-main{grid-template-columns:1fr 1fr;padding:34px 0 28px}.footer-brand,.footer-join{grid-column:1/-1}.footer-bottom{align-items:flex-start;flex-direction:column;justify-content:center;padding:13px 0}.footer-bottom>span:last-child{font-size:8px}}
 
