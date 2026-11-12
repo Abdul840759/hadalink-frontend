@@ -1721,3 +1721,24 @@ button,.button,input,select,textarea{line-height:1.4}
 .profile-account-row{display:flex;align-items:center;gap:12px;min-width:0}
 .profile-account-row>.profile-check{flex:0 0 auto;margin:0}
 .profile-account-row>h3{min-width:0;margin:0;overflow-wrap:anywhere}
+
+/* Machinery photos: swipe on touch screens, with clear manual controls. */
+.image-carousel{position:relative;width:100%;height:130px;overflow:hidden;background:var(--card2);touch-action:pan-y;isolation:isolate}
+.image-carousel>img{display:block;width:100%;height:100%;object-fit:cover;user-select:none;-webkit-user-drag:none}
+.farmer-machine-card>.image-carousel{padding:0}
+.farmer-detail-image{height:210px;padding:0;object-fit:initial}
+.farmer-detail-image>img{height:100%}
+.image-carousel-arrow{position:absolute;top:50%;display:grid;width:32px;height:32px;place-items:center;transform:translateY(-50%);border:1px solid #ffffff80;border-radius:50%;background:#07180fd9;color:white;box-shadow:0 2px 10px #0004;cursor:pointer}
+.image-carousel-arrow.previous{left:9px}.image-carousel-arrow.next{right:9px}
+.image-carousel-count{position:absolute;top:9px;right:9px;padding:4px 8px;border:1px solid #ffffff44;border-radius:20px;background:#07180fd9;color:white;font-size:10px;font-weight:700}
+.image-carousel-dots{position:absolute;right:0;bottom:9px;left:0;display:flex;justify-content:center;gap:6px}
+.image-carousel-dots>button{width:7px;height:7px;padding:0;border:1px solid #fff;border-radius:50%;background:#ffffff70;cursor:pointer}
+.image-carousel-dots>button[aria-current="true"]{width:18px;border-radius:8px;background:#fff}
+.farmer-detail-image.real-image-empty{height:210px}
+.listing-location-action{display:grid;justify-items:start;gap:7px;margin-top:-4px}
+.listing-location-action>small{color:var(--muted);font-size:10px;line-height:1.55}
+.farmer-live-location-link{display:inline-flex;align-items:center;gap:7px;width:max-content;max-width:100%;margin-top:10px;padding:8px 11px;border:1px solid var(--line2);border-radius:9px;background:var(--surface);color:var(--green);font-size:11px;font-weight:700;text-decoration:none}
+.farmer-live-location-link:hover{border-color:var(--green);background:var(--card2)}
+.transport-location-notice{display:flex;align-items:flex-start;gap:7px;margin:12px 0 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--muted);font-size:10px;line-height:1.55}
+.transport-location-notice>svg{flex:none;color:var(--green)}
+@media(max-width:540px){.image-carousel{height:106px}.farmer-detail-image{height:170px}.farmer-detail-image.real-image-empty{height:170px;min-height:170px}.image-carousel-arrow{width:30px;height:30px}.listing-location-action>small{font-size:9px}.farmer-live-location-link{font-size:10px}}

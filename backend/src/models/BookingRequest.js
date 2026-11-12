@@ -30,6 +30,12 @@ const bookingRequestSchema = new mongoose.Schema({
     deliveredAt: { type: Date },
     deliveryNote: { type: String, trim: true, maxlength: 1000 },
     requirements: { type: String, trim: true, maxlength: 1000 },
+    liveLocation: {
+      latitude: { type: Number, min: -90, max: 90 },
+      longitude: { type: Number, min: -180, max: 180 },
+      accuracy: { type: Number, min: 0 },
+      updatedAt: { type: Date },
+    },
   },
 }, { timestamps: true, versionKey: false });
 

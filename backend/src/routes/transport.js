@@ -22,17 +22,24 @@ router.get('/requests', requireAuth, requireLogistics, requireDatabase, async (r
     .map(area => area.trim()).filter(Boolean).slice(0, 10);
   if (!areas.length) return response.json({ data: [] });
   const areaTerms = areas.map(area => new RegExp(area.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'));
-  const matchingEquipment = await Equipment.find({ status: 'available', $or: [
+  const matchingEquipment = await Equipment.find({ status: 'booked', $or: [
     { 'location.lga': { $in: areaTerms } }, { 'location.area': { $in: areaTerms } },
   ] }).distinct('_id');
   const items = await BookingRequest.find({
     'transport.requested': true,
+    status: 'accepted',
     'transport.status': 'requested',
     'transport.provider': null,
     'transport.declinedBy': { $ne: request.user._id },
     $or: [{ location: { $in: areaTerms } }, { equipment: { $in: matchingEquipment } }],
   }).sort({ requestedDate: 1 }).populate('farmer', 'name')
     .populate('provider', 'name profile.businessName').populate('equipment', 'name category location images').lean();
+  for (const item of items) {
+    if (item.equipment?.location) {
+      delete item.equipment.location.pickupAddress;
+      delete item.equipment.location.coordinates;
+    }
+  }
   return response.json({ data: items });
 });
 
@@ -71,12 +78,32 @@ router.patch('/:id/status', requireAuth, requireLogistics, requireDatabase, asyn
   if (deliveryNote.length > 1000) return response.status(400).json({ error: 'Delivery notes must be 1,000 characters or fewer.' });
   const item = await BookingRequest.findOneAndUpdate(
     { _id: request.params.id, 'transport.provider': request.user._id, 'transport.status': currentStatus },
-    { $set: { 'transport.status': nextStatus, [`transport.${timestampField}`]: new Date(), ...(nextStatus === 'delivered' && deliveryNote ? { 'transport.deliveryNote': deliveryNote } : {}) } },
+    { $set: { 'transport.status': nextStatus, [`transport.${timestampField}`]: new Date(), ...(nextStatus === 'delivered' && deliveryNote ? { 'transport.deliveryNote': deliveryNote } : {}) }, ...(nextStatus === 'delivered' ? { $unset: { 'transport.liveLocation': 1 } } : {}) },
     { new: true, runValidators: true },
   ).populate('farmer', 'name email profile.phone profile.whatsapp').populate('provider', 'name profile.businessName')
     .populate('equipment', 'name category location images').lean();
   if (!item) return response.status(409).json({ error: 'This job is not assigned to you or has moved to another status.' });
+  if (nextStatus === 'delivered' && item.status === 'completed') {
+    await Equipment.updateOne({ _id: item.equipment?._id, provider: item.provider?._id, status: 'booked' }, { $set: { status: 'available' } });
+  }
   return response.json({ data: item });
+});
+
+router.patch('/:id/location', requireAuth, requireLogistics, requireDatabase, async (request, response) => {
+  if (!mongoose.isValidObjectId(request.params.id)) return response.status(400).json({ error: 'Invalid transport job.' });
+  const latitude = Number(request.body?.latitude);
+  const longitude = Number(request.body?.longitude);
+  const accuracy = Number(request.body?.accuracy);
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180 || !Number.isFinite(accuracy) || accuracy < 0 || accuracy > 100000) {
+    return response.status(400).json({ error: 'A valid current location is required.' });
+  }
+  const item = await BookingRequest.findOneAndUpdate(
+    { _id: request.params.id, 'transport.provider': request.user._id, 'transport.status': 'in_transit' },
+    { $set: { 'transport.liveLocation': { latitude, longitude, accuracy, updatedAt: new Date() } } },
+    { new: true, runValidators: true },
+  ).select('_id');
+  if (!item) return response.status(409).json({ error: 'Live location is only available for your active trip.' });
+  return response.json({ data: { updated: true } });
 });
 
 router.get('/profile', requireAuth, requireLogistics, async (request, response) => response.json({ data: { profile: request.user.profile } }));

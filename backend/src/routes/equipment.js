@@ -48,6 +48,7 @@ router.get('/', requireDatabase, async (request, response) => {
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
+      .select('-location.pickupAddress -location.coordinates')
       .populate('provider', 'name profile.businessName')
       .lean(),
     Equipment.countDocuments(filter),
@@ -74,6 +75,12 @@ router.post('/', requireAuth, requireDatabase, async (request, response) => {
   const name = String(body.name || '').trim();
   const category = String(body.category || '').trim();
   const area = String(body.area || '').trim();
+  const pickupAddress = String(body.pickupAddress || '').trim();
+  const latitude = Number(body.coordinates?.latitude);
+  const longitude = Number(body.coordinates?.longitude);
+  const hasCoordinateInput = body.coordinates !== undefined && body.coordinates !== null;
+  const hasCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude)
+    && latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
   const services = Array.isArray(body.services)
     ? [...new Set(body.services.map(value => String(value).trim()).filter(Boolean))].slice(0, 20)
     : [];
@@ -83,9 +90,11 @@ router.post('/', requireAuth, requireDatabase, async (request, response) => {
 
   if (name.length < 2 || name.length > 140 || !equipmentCategories.includes(category)
     || !Number.isFinite(amount) || amount <= 0 || !areaParts.length || area.length > 220
+    || pickupAddress.length < 5 || pickupAddress.length > 240
     || services.length === 0 || images.length > 6) {
     return response.status(400).json({ error: 'Add a valid machine name, category, rate, operating area, and at least one service.' });
   }
+  if (hasCoordinateInput && !hasCoordinates) return response.status(400).json({ error: 'The captured machine coordinates are invalid. Capture the location again.' });
 
   const ownerFolder = `hadalink/${request.user._id}/equipment/`;
   const validImages = [];
@@ -110,7 +119,7 @@ router.post('/', requireAuth, requireDatabase, async (request, response) => {
     category,
     description: String(body.description || '').trim().slice(0, 3000),
     images: validImages,
-    location: { state: 'Plateau', lga: areaParts[0].slice(0, 100), ...(areaParts[1] ? { area: areaParts.slice(1).join(', ').slice(0, 120) } : {}) },
+    location: { state: 'Plateau', lga: areaParts[0].slice(0, 100), ...(areaParts[1] ? { area: areaParts.slice(1).join(', ').slice(0, 120) } : {}), pickupAddress, ...(hasCoordinates ? { coordinates: { latitude, longitude } } : {}) },
     rate: { amount, unit: 'hectare' },
     services,
     operatorArrangement: operatorAvailable ? 'by-arrangement' : 'not-included',
@@ -126,14 +135,21 @@ router.patch('/:id', requireAuth, requireDatabase, async (request, response) => 
   const name = String(body.name || '').trim();
   const category = String(body.category || '').trim();
   const area = String(body.area || '').trim();
+  const pickupAddress = String(body.pickupAddress || '').trim();
+  const latitude = Number(body.coordinates?.latitude);
+  const longitude = Number(body.coordinates?.longitude);
+  const hasCoordinateInput = body.coordinates !== undefined && body.coordinates !== null;
+  const hasCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude)
+    && latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
   const services = Array.isArray(body.services) ? [...new Set(body.services.map(value => String(value).trim()).filter(Boolean))].slice(0, 20) : [];
   const amount = Number(String(body.rate ?? '').replace(/[₦,\s]/g, ''));
   const areaParts = area.split(',').map(part => part.trim()).filter(Boolean);
   const hasImages = Object.hasOwn(body, 'images');
   const images = Array.isArray(body.images) ? body.images : [];
-  if (name.length < 2 || name.length > 140 || !equipmentCategories.includes(category) || !Number.isFinite(amount) || amount <= 0 || !areaParts.length || area.length > 220 || !services.length) {
-    return response.status(400).json({ error: 'Add a valid machine name, category, rate, operating area, and at least one service.' });
+  if (name.length < 2 || name.length > 140 || !equipmentCategories.includes(category) || !Number.isFinite(amount) || amount <= 0 || !areaParts.length || area.length > 220 || pickupAddress.length < 5 || pickupAddress.length > 240 || !services.length) {
+    return response.status(400).json({ error: 'Add a valid machine name, category, rate, operating area, pickup address, and at least one service.' });
   }
+  if (hasCoordinateInput && !hasCoordinates) return response.status(400).json({ error: 'The captured machine coordinates are invalid. Capture the location again.' });
   if (hasImages && images.length > 6) return response.status(400).json({ error: 'A listing can have up to six equipment photos.' });
   const ownerFolder = `hadalink/${request.user._id}/equipment/`;
   const validImages = [];
@@ -153,9 +169,11 @@ router.patch('/:id', requireAuth, requireDatabase, async (request, response) => 
     'rate.amount': amount, 'rate.unit': 'hectare', operatorArrangement: body.operatorAvailable === false ? 'not-included' : 'by-arrangement',
   };
   if (hasImages) updates.images = validImages;
-  const item = await Equipment.findOneAndUpdate({ _id: request.params.id, provider: request.user._id }, {
-    $set: updates,
-  }, { new: true, runValidators: true }).lean();
+  updates['location.pickupAddress'] = pickupAddress;
+  const update = { $set: updates };
+  if (hasCoordinates) update.$set['location.coordinates'] = { latitude, longitude };
+  else update.$unset = { 'location.coordinates': 1 };
+  const item = await Equipment.findOneAndUpdate({ _id: request.params.id, provider: request.user._id }, update, { new: true, runValidators: true }).lean();
   if (!item) return response.status(404).json({ error: 'Equipment listing not found in your account.' });
   return response.json({ data: item });
 });
@@ -175,6 +193,7 @@ router.delete('/:id', requireAuth, requireDatabase, async (request, response) =>
   if (!mongoose.isValidObjectId(request.params.id)) return response.status(400).json({ error: 'Invalid equipment id.' });
   const item = await Equipment.findOne({ _id: request.params.id, provider: request.user._id });
   if (!item) return response.status(404).json({ error: 'Equipment listing not found in your account.' });
+  if (item.status === 'booked') return response.status(409).json({ error: 'This machine has an active booking and cannot be deleted until the booking is completed.' });
   await item.deleteOne();
   const { CLOUDINARY_CLOUD_NAME: cloudName, CLOUDINARY_API_KEY: apiKey, CLOUDINARY_API_SECRET: apiSecret } = process.env;
   if (cloudName && apiKey && apiSecret) {
@@ -194,6 +213,7 @@ router.delete('/:id', requireAuth, requireDatabase, async (request, response) =>
 router.get('/:id', requireDatabase, async (request, response) => {
   if (!mongoose.isValidObjectId(request.params.id)) return response.status(400).json({ error: 'Invalid equipment id.' });
   const item = await Equipment.findOne({ _id: request.params.id, status: 'available' })
+    .select('-location.pickupAddress -location.coordinates')
     .populate('provider', 'name profile.businessName profile.primaryArea')
     .lean();
   if (!item) return response.status(404).json({ error: 'Equipment listing not found.' });

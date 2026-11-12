@@ -17,6 +17,14 @@ router.get('/', requireAuth, requireDatabase, async (request, response) => {
     .populate('transport.provider', 'name profile.businessName')
     .populate('equipment', 'name category images location rate services operatorArrangement')
     .lean();
+  if (request.user.role === 'farmer') {
+    for (const item of items) {
+      if (!['accepted', 'completed'].includes(item.status) && item.equipment?.location) {
+        delete item.equipment.location.pickupAddress;
+        delete item.equipment.location.coordinates;
+      }
+    }
+  }
   return response.json({ data: items });
 });
 
@@ -52,6 +60,10 @@ router.post('/', requireAuth, requireDatabase, async (request, response) => {
     .populate('provider', 'name profile.businessName profile.phone profile.whatsapp')
     .populate('transport.provider', 'name profile.businessName')
     .populate('equipment', 'name category images location rate services operatorArrangement').lean();
+  if (populated?.equipment?.location) {
+    delete populated.equipment.location.pickupAddress;
+    delete populated.equipment.location.coordinates;
+  }
   return response.status(201).json({ data: populated });
 });
 
@@ -60,16 +72,37 @@ router.patch('/:id/status', requireAuth, requireDatabase, async (request, respon
   if (!mongoose.isValidObjectId(request.params.id)) return response.status(400).json({ error: 'Invalid booking request id.' });
   const status = String(request.body?.status || '').toLowerCase();
   if (!['accepted', 'declined', 'completed'].includes(status)) return response.status(400).json({ error: 'Choose a valid booking status.' });
-  const current = await BookingRequest.findOne({ _id: request.params.id, provider: request.user._id }).select('status');
+  const current = await BookingRequest.findOne({ _id: request.params.id, provider: request.user._id }).select('status equipment transport.requested transport.status');
   if (!current) return response.status(404).json({ error: 'Booking request not found in your account.' });
   const allowedNext = current.status === 'pending' ? ['accepted', 'declined'] : current.status === 'accepted' ? ['completed'] : [];
   if (!allowedNext.includes(status)) return response.status(409).json({ error: 'This booking can no longer be moved to that status.' });
+  let lockedEquipmentId = null;
+  if (status === 'accepted') {
+    const locked = await Equipment.findOneAndUpdate(
+      { _id: current.equipment, provider: request.user._id, status: 'available' },
+      { $set: { status: 'booked' } },
+      { new: true },
+    ).select('_id').lean();
+    if (!locked) return response.status(409).json({ error: 'This machine is already booked or unavailable. Refresh your requests.' });
+    lockedEquipmentId = locked._id;
+  }
   const item = await BookingRequest.findOneAndUpdate(
     { _id: request.params.id, provider: request.user._id, status: current.status },
     { $set: { status, ...(status === 'completed' ? { completedAt: new Date() } : {}) } },
     { new: true, runValidators: true },
   ).populate('farmer', 'name email profile.phone profile.whatsapp').populate('provider', 'name profile.businessName').populate('transport.provider', 'name profile.businessName').populate('equipment', 'name category images location rate services operatorArrangement').lean();
-  if (!item) return response.status(404).json({ error: 'Booking request not found in your account.' });
+  if (!item) {
+    if (lockedEquipmentId) await Equipment.updateOne({ _id: lockedEquipmentId, status: 'booked' }, { $set: { status: 'available' } });
+    return response.status(404).json({ error: 'Booking request not found in your account.' });
+  }
+  if (status === 'accepted') {
+    await BookingRequest.updateMany(
+      { _id: { $ne: current._id }, equipment: current.equipment, status: 'pending' },
+      { $set: { status: 'declined', providerResponse: 'This machine has been booked for another request.' } },
+    );
+  }
+  const transportStillActive = item.transport?.requested && !['delivered', 'cancelled', 'unfulfilled'].includes(item.transport.status);
+  if (status === 'completed' && !transportStillActive) await Equipment.updateOne({ _id: item.equipment?._id, provider: request.user._id, status: 'booked' }, { $set: { status: 'available' } });
   return response.json({ data: item });
 });
 

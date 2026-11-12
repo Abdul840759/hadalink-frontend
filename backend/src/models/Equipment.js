@@ -23,11 +23,16 @@ const equipmentSchema = new mongoose.Schema({
     state: { type: String, default: 'Plateau', trim: true },
     lga: { type: String, required: true, trim: true, maxlength: 100 },
     area: { type: String, trim: true, maxlength: 120 },
+    pickupAddress: { type: String, trim: true, maxlength: 240 },
+    coordinates: {
+      latitude: { type: Number, min: -90, max: 90 },
+      longitude: { type: Number, min: -180, max: 180 },
+    },
   },
   rate: { amount: { type: Number, required: true, min: 0 }, unit: { type: String, enum: ['hectare', 'day', 'hour', 'service'], default: 'hectare' } },
   services: { type: [String], default: [] },
   operatorArrangement: { type: String, enum: ['included', 'by-arrangement', 'not-included'], default: 'by-arrangement' },
-  status: { type: String, enum: ['draft', 'available', 'paused'], default: 'draft', index: true },
+  status: { type: String, enum: ['draft', 'available', 'paused', 'booked'], default: 'draft', index: true },
 }, { timestamps: true, versionKey: false });
 
 equipmentSchema.index({ status: 1, category: 1, 'location.lga': 1, 'rate.amount': 1 });
