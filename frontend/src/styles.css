@@ -381,6 +381,9 @@ button,a,input,select,textarea{-webkit-tap-highlight-color:transparent;touch-act
 .hero-content,.page-heading,.auth-form-side{animation:surface-enter .48s cubic-bezier(.2,.75,.25,1) both}
 .panel,.metric-card,.machine-card,.review-card,.landing-machine{animation:card-enter .45s cubic-bezier(.2,.75,.25,1) both}
 .logistics-workspace .panel,.logistics-workspace .metric-card{animation:none!important}
+.logistics-portal *,
+.logistics-portal *::before,
+.logistics-portal *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
 .logistics-demo-notice{display:flex;align-items:center;gap:12px;padding:13px 15px;border:1px solid var(--line);border-radius:12px;background:linear-gradient(110deg,rgba(32,133,94,.09),rgba(233,163,38,.07));color:var(--green)}
 .logistics-demo-notice>svg{flex:none}
 .logistics-demo-notice>span:first-of-type{display:grid;gap:3px;min-width:0;flex:1}
