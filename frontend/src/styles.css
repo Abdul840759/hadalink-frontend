@@ -1783,6 +1783,13 @@ button,.button,input,select,textarea{line-height:1.4}
 .action-pin-settings-form>small{display:block;color:var(--muted);font-size:11px;line-height:1.65}
 .action-pin-settings-form .settings-actions{display:flex;flex-wrap:wrap;gap:8px}
 .action-pin-settings-form .settings-help{margin:0;color:var(--muted);font-size:11px;line-height:1.55;overflow-wrap:anywhere}
+.pin-verification-dialog .pin-verification-links{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:11px}
+.pin-verification-dialog .pin-verification-links .text-link{padding:0;border:0;background:transparent;color:var(--green);font:inherit;font-weight:700;cursor:pointer}
+.pin-verification-dialog .pin-verification-links .text-link:disabled{opacity:.6;cursor:wait}
+.action-pin-settings-form .settings-help[role="status"]{color:var(--green);font-weight:700}
+:root[data-theme="light"] .pin-verification-dialog>h2{color:#17271d}
+:root[data-theme="light"] .pin-verification-dialog>p{color:#536b5b}
+:root[data-theme="light"] .pin-verification-dialog>p strong{color:#263d2d}
 :root[data-theme="light"] .action-pin-settings .panel-head h2{color:#17271d}
 :root[data-theme="light"] .action-pin-settings .panel-head>div>p{color:#536b5b}
 :root[data-theme="light"] .action-pin-settings .field-label{color:#314b38}

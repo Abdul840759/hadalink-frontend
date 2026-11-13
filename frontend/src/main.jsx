@@ -1510,6 +1510,7 @@ function ActionPinSettings({ user, onUserUpdated }) {
   const [confirmation, setConfirmation] = useState(emptyPinDigits);
   const [code, setCode] = useState(emptyPinDigits);
   const [codeSent, setCodeSent] = useState(false);
+  const [verificationOpen, setVerificationOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   function resetEmailCode() { setCodeSent(false); setCode(emptyPinDigits()); setMessage(''); }
@@ -1521,7 +1522,8 @@ function ActionPinSettings({ user, onUserUpdated }) {
         pin: pinDigitsToString(pin), confirmation: pinDigitsToString(confirmation),
       });
       setCodeSent(true);
-      setMessage(`A six-digit verification code was sent to ${user?.email || 'your account email'}.`);
+      setVerificationOpen(true);
+      setMessage('');
     } catch (error) { setMessage(error.message || 'The verification code could not be sent.'); }
     finally { setBusy(false); }
   }
@@ -1533,13 +1535,16 @@ function ActionPinSettings({ user, onUserUpdated }) {
         pin: pinDigitsToString(pin), confirmation: pinDigitsToString(confirmation), code: pinDigitsToString(code),
       });
       onUserUpdated(data.user);
-      setCurrentPin(emptyPinDigits()); setPin(emptyPinDigits()); setConfirmation(emptyPinDigits()); setCode(emptyPinDigits()); setCodeSent(false);
-      setMessage('Your action PIN is saved.');
+      setCurrentPin(emptyPinDigits()); setPin(emptyPinDigits()); setConfirmation(emptyPinDigits()); setCode(emptyPinDigits()); setCodeSent(false); setVerificationOpen(false);
+      setMessage(user?.hasActionPin ? 'Verified — your PIN has been changed.' : 'Verified — your PIN is set.');
     } catch (error) { setMessage(error.message || 'The action PIN could not be saved.'); }
     finally { setBusy(false); }
   }
   function changePin(setter, value) { setter(value); resetEmailCode(); }
-  return <section className="panel action-pin-settings"><PanelHead title="Role action PIN" subtitle={`A private six-digit PIN for protected ${user?.role || 'account'} actions.`}/><form className="action-pin-settings-form" onSubmit={event=>codeSent?save(event):(event.preventDefault(),requestEmailCode())}>{user?.hasActionPin&&<PinCodeField label="CURRENT ACTION PIN" value={currentPin} onChange={value=>changePin(setCurrentPin,value)} autoFocus/>}<PinCodeField label={user?.hasActionPin?'NEW SIX-DIGIT PIN':'CREATE SIX-DIGIT PIN'} value={pin} onChange={value=>changePin(setPin,value)} autoFocus={!user?.hasActionPin}/><PinCodeField label="CONFIRM PIN" value={confirmation} onChange={value=>changePin(setConfirmation,value)}/>{codeSent&&<PinCodeField label="EMAIL VERIFICATION CODE" value={code} onChange={setCode} masked={false} autoFocus/>}<small>This six-digit PIN protects actions for your role. We’ll email a one-time code to {user?.email || 'your account email'} before saving a new or changed PIN.</small><div className="settings-actions"><button type="button" className="button button-ghost" onClick={requestEmailCode} disabled={busy}>{busy&&!codeSent?'Sending code…':codeSent?'Resend verification code':'Email me a verification code'} <Mail size={14}/></button>{codeSent&&<button className="button button-primary" disabled={busy}>{busy?'Verifying…':'Verify & save PIN'} <Check size={14}/></button>}</div>{message&&<p className="settings-help" role="status">{message}</p>}</form></section>;
+  return <>
+    <section className="panel action-pin-settings"><PanelHead title="Role action PIN" subtitle={`A private six-digit PIN for protected ${user?.role || 'account'} actions.`}/><form className="action-pin-settings-form" onSubmit={event=>{event.preventDefault();requestEmailCode()}}>{user?.hasActionPin&&<PinCodeField label="CURRENT ACTION PIN" value={currentPin} onChange={value=>changePin(setCurrentPin,value)} autoFocus/>}<PinCodeField label={user?.hasActionPin?'NEW SIX-DIGIT PIN':'CREATE SIX-DIGIT PIN'} value={pin} onChange={value=>changePin(setPin,value)} autoFocus={!user?.hasActionPin}/><PinCodeField label="CONFIRM PIN" value={confirmation} onChange={value=>changePin(setConfirmation,value)}/><small>This six-digit PIN protects actions for your role. We’ll send a one-time code to {user?.email || 'your account email'} before saving a new or changed PIN.</small><div className="settings-actions"><button type="submit" className="button button-primary" disabled={busy}>{busy?'Sending code…':'Save and verify'} <Check size={14}/></button></div>{message&&<p className="settings-help" role="status">{message}</p>}</form></section>
+    {verificationOpen&&createPortal(<div className="action-pin-backdrop" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)setVerificationOpen(false)}}><section className="action-pin-dialog pin-verification-dialog" role="dialog" aria-modal="true" aria-labelledby="pin-verification-title"><header><span className="action-pin-icon"><ShieldCheck size={18}/></span><button type="button" aria-label="Close verification" onClick={()=>setVerificationOpen(false)}><X size={17}/></button></header><span className="eyebrow">CONFIRM VERIFICATION</span><h2 id="pin-verification-title">Verify your email</h2><p>A six-digit code has been sent to <strong>{user?.email || 'your account email'}</strong>. Enter it below to verify and save your PIN.</p><form onSubmit={save}><PinCodeField label="6-DIGIT VERIFICATION CODE" value={code} onChange={setCode} masked={false} autoFocus/>{message&&<div className="auth-error" role="alert">{message}</div>}<div className="pin-verification-links"><span>Didn’t receive it?</span><button type="button" className="text-link" onClick={requestEmailCode} disabled={busy}>{busy?'Sending…':'Send a new code'}</button></div><div className="action-pin-actions"><button type="button" className="button button-ghost" onClick={()=>setVerificationOpen(false)}>Cancel</button><button className="button button-primary" disabled={busy}>{busy?'Verifying…':'Verify and save PIN'} <Check size={14}/></button></div></form></section></div>,document.body)}
+  </>;
 }
 
 function SettingsPage({ currentUser, onUserUpdated }) {
