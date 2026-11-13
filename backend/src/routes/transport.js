@@ -88,6 +88,10 @@ router.patch('/:id/status', requireAuth, requireLogistics, requireDatabase, asyn
   ).populate('farmer', 'name email profile.phone profile.whatsapp').populate('provider', 'name profile.businessName')
     .populate('equipment', 'name category location images').lean();
   if (!item) return response.status(409).json({ error: 'This job is not assigned to you or has moved to another status.' });
+  if (nextStatus === 'delivered' && item.payment?.status === 'paid' && item.payment?.payoutStatus === 'held') {
+    await BookingRequest.updateOne({ _id: item._id, 'payment.status': 'paid', 'payment.payoutStatus': 'held' }, { $set: { 'payment.payoutStatus': 'release_pending' } });
+    item.payment.payoutStatus = 'release_pending';
+  }
   if (nextStatus === 'delivered' && item.status === 'completed') {
     await Equipment.updateOne({ _id: item.equipment?._id, provider: item.provider?._id, status: 'booked' }, { $set: { status: 'available' } });
   }

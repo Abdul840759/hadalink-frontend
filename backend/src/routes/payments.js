@@ -49,12 +49,14 @@ router.post('/bookings/:id/initialize', requireAuth, requireActionPinFor('farmer
   if (booking.status !== 'accepted') return response.status(409).json({ error: 'Payment is available after the provider accepts the booking.' });
   if (booking.payment?.status === 'paid') return response.status(409).json({ error: 'This booking is already paid.' });
   const amountKobo = amountFor(booking);
+  const commissionKobo = Math.round(amountKobo * 0.10);
+  const providerAmountKobo = amountKobo - commissionKobo;
   const user = await User.findById(request.user._id).select('email').lean();
   if (!user?.email) return response.status(400).json({ error: 'Add an email address to your account before paying.' });
   const reference = `hdl_${Date.now()}_${randomBytes(10).toString('hex')}`;
   const reservation = await BookingRequest.updateOne(
     { _id: booking._id, farmer: request.user._id, status: 'accepted', 'payment.status': { $ne: 'paid' } },
-    { $set: { 'payment.status': 'pending', 'payment.reference': reference, 'payment.amountKobo': amountKobo, 'payment.currency': 'NGN' } },
+    { $set: { 'payment.status': 'pending', 'payment.reference': reference, 'payment.amountKobo': amountKobo, 'payment.currency': 'NGN', 'payment.commissionRate': 10, 'payment.commissionKobo': commissionKobo, 'payment.providerAmountKobo': providerAmountKobo } },
   );
   if (!reservation.matchedCount) return response.status(409).json({ error: 'This booking is no longer available for payment. Refresh your bookings.' });
   let transaction;
@@ -73,7 +75,7 @@ router.post('/bookings/:id/initialize', requireAuth, requireActionPinFor('farmer
   } catch (error) {
     await BookingRequest.updateOne(
       { _id: booking._id, 'payment.reference': reference, 'payment.status': 'pending' },
-      { $set: { 'payment.status': 'unpaid' }, $unset: { 'payment.reference': 1, 'payment.amountKobo': 1 } },
+      { $set: { 'payment.status': 'unpaid' }, $unset: { 'payment.reference': 1, 'payment.amountKobo': 1, 'payment.commissionRate': 1, 'payment.commissionKobo': 1, 'payment.providerAmountKobo': 1 } },
     );
     throw error;
   }
@@ -96,6 +98,7 @@ router.get('/verify', requireAuth, async (request, response) => {
   booking.payment.status = 'paid';
   booking.payment.transactionId = String(result.id);
   booking.payment.paidAt = result.paid_at ? new Date(result.paid_at) : new Date();
+  booking.payment.payoutStatus = booking.status === 'completed' || booking.transport?.status === 'delivered' ? 'release_pending' : 'held';
   await booking.save();
   return response.json({ data: { status: 'paid', bookingId: String(booking._id) } });
 });
@@ -117,6 +120,7 @@ export async function handlePaystackWebhook(request, response) {
   booking.payment.status = 'paid';
   booking.payment.transactionId = String(transaction.id);
   booking.payment.paidAt = transaction.paid_at ? new Date(transaction.paid_at) : new Date();
+  booking.payment.payoutStatus = booking.status === 'completed' || booking.transport?.status === 'delivered' ? 'release_pending' : 'held';
   await booking.save();
   return response.sendStatus(200);
 }

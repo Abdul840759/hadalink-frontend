@@ -77,7 +77,7 @@ router.patch('/:id/status', requireAuth, requireDatabase, requireActionPinForAcc
   if (!mongoose.isValidObjectId(request.params.id)) return response.status(400).json({ error: 'Invalid booking request id.' });
   const status = String(request.body?.status || '').toLowerCase();
   if (!['accepted', 'declined', 'completed'].includes(status)) return response.status(400).json({ error: 'Choose a valid booking status.' });
-  const current = await BookingRequest.findOne({ _id: request.params.id, provider: request.user._id }).select('status equipment transport.requested transport.status');
+  const current = await BookingRequest.findOne({ _id: request.params.id, provider: request.user._id }).select('status equipment transport.requested transport.status payment.status payment.payoutStatus');
   if (!current) return response.status(404).json({ error: 'Booking request not found in your account.' });
   const allowedNext = current.status === 'pending' ? ['accepted', 'declined'] : current.status === 'accepted' ? ['completed'] : [];
   if (!allowedNext.includes(status)) return response.status(409).json({ error: 'This booking can no longer be moved to that status.' });
@@ -93,7 +93,7 @@ router.patch('/:id/status', requireAuth, requireDatabase, requireActionPinForAcc
   }
   const item = await BookingRequest.findOneAndUpdate(
     { _id: request.params.id, provider: request.user._id, status: current.status },
-    { $set: { status, ...(status === 'completed' ? { completedAt: new Date() } : {}) } },
+    { $set: { status, ...(status === 'completed' ? { completedAt: new Date(), ...(current.payment?.status === 'paid' && current.payment?.payoutStatus === 'held' ? { 'payment.payoutStatus': 'release_pending' } : {}) } : {}) } },
     { new: true, runValidators: true },
   ).populate('farmer', 'name email profile.phone profile.whatsapp').populate('provider', 'name profile.businessName').populate('transport.provider', 'name profile.businessName').populate('equipment', 'name category images location rate services operatorArrangement').lean();
   if (!item) {
