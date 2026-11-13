@@ -95,7 +95,7 @@ function SiteAccessGate({ siteKey, state, theme, onVerified, onRetry }) {
         theme,
         callback: async token => {
           setBusy(true);
-          setMessage('Checking your verification…');
+          setMessage('');
           try {
             const response = await fetch(`${API_BASE}/auth/site-access/verify`, {
               method: 'POST',
