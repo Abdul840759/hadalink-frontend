@@ -503,10 +503,14 @@ function App() {
         const role = data.user.role === 'provider' ? 'Provider' : data.user.role === 'logistics' ? 'Logistics' : 'Farmer';
         localStorage.setItem('hadalink-role', role);
         setSignupRole(role);
-        authRequest('/equipment', undefined, 'GET')
-          .then(({ data: items }) => { if (Array.isArray(items)) setMachinesState(items.map(mapEquipmentRecord)); })
-          .catch(error => { console.error('Could not load published equipment:', error); setMachinesError(error.message || 'Published equipment could not be loaded.'); })
-          .finally(() => setMachinesLoading(false));
+        if (data.user.role !== 'logistics') {
+          authRequest('/equipment', undefined, 'GET')
+            .then(({ data: items }) => { if (Array.isArray(items)) setMachinesState(items.map(mapEquipmentRecord)); })
+            .catch(error => { console.error('Could not load published equipment:', error); setMachinesError(error.message || 'Published equipment could not be loaded.'); })
+            .finally(() => setMachinesLoading(false));
+        } else {
+          setMachinesLoading(false);
+        }
       })
       .catch(() => {
         setOnboardingRequired(false);
@@ -589,16 +593,6 @@ function App() {
     const timer = window.setInterval(refresh, 12000);
     return () => { active = false; window.clearInterval(timer); };
   }, [currentUser, page, requestsState.some(item => item.transportStatusKey === 'in_transit')]);
-  React.useEffect(() => {
-    if (currentUser?.role !== 'logistics' || !['Dashboard', 'Requests', 'My Jobs'].includes(page)) return;
-    let active = true;
-    setTransportLoading(true);
-    Promise.all([authRequest('/transport/requests', undefined, 'GET'), authRequest('/transport/jobs', undefined, 'GET')])
-      .then(([available, assigned]) => { if (active) { setTransportRequests((available.data || []).map(mapBookingRecord)); setTransportJobs((assigned.data || []).map(mapBookingRecord)); } })
-      .catch(error => { if (active) flash(error.message || 'Transport jobs could not be loaded.'); })
-      .finally(() => { if (active) setTransportLoading(false); });
-    return () => { active = false; };
-  }, [currentUser, page]);
   React.useEffect(() => {
     if (!['Dashboard','My Machinery','Edit Machinery','Calendar','Analytics'].includes(page) || currentUser?.role !== 'provider') return undefined;
     let active = true;
@@ -1101,44 +1095,48 @@ const transportNext = { Accepted: ['scheduled','Schedule pickup'], Scheduled: ['
 function LogisticsWorkspace({ page, user, requests, jobs, loading, onRefresh, onDecision, onStatus, onUserUpdated, requestActionPin, flash, go }) {
   const [busyId, setBusyId] = useState('');
   const [deliveryNote, setDeliveryNote] = useState({});
+  const demoDate = new Date(Date.now() + 3 * 86400000).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' });
+  const [demoRequests, setDemoRequests] = useState(() => [
+    { id:'DEMO-TR-1042', machine:'Massey Ferguson 375', machineKind:'Tractor transport', machineArea:'Jos South', place:'Kuru, Jos South', date:demoDate, transportFee:35000, farmer:'A farmer in Jos South', farmerPhone:'', farmerEmail:'', transportRequirements:'Please call on arrival. The farm entrance is beside the market road.', note:'Delivery requested before afternoon.', transportStatus:'Awaiting provider', transportStatusKey:'pending' },
+    { id:'DEMO-TR-1043', machine:'Boom sprayer', machineKind:'Sprayer transport', machineArea:'Barkin Ladi', place:'Heipang, Barkin Ladi', date:demoDate, transportFee:28000, farmer:'A farmer in Barkin Ladi', farmerPhone:'', farmerEmail:'', transportRequirements:'Handle the spray equipment carefully.', note:'', transportStatus:'Awaiting provider', transportStatusKey:'pending' },
+  ]);
+  const [demoJobs, setDemoJobs] = useState(() => [
+    { id:'DEMO-JOB-2081', machine:'John Deere 5075E', machineKind:'Tractor transport', machineArea:'Jos North', place:'Riyom', date:demoDate, transportFee:42000, farmer:'A farmer in Riyom', farmerPhone:'', farmerEmail:'', pickupAddress:'Pickup area: Jos North', transportRequirements:'Confirm arrival with the farmer.', note:'', transportStatus:'Scheduled', transportStatusKey:'scheduled' },
+  ]);
   const [profile, setProfile] = useState({ businessName:user?.profile?.businessName||'', contactName:user?.profile?.contactName||'', phone:nigerianPhoneValue(user?.profile?.phone), primaryArea:user?.profile?.primaryArea||'', serviceAreas:(user?.profile?.serviceAreas||[]).join(', '), transportLoads:(user?.profile?.transportLoads||[]).join(', '), transportCapacity:user?.profile?.transportCapacity||'', vehicleDetails:user?.profile?.vehicleDetails||'' });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSaved, setProfileSaved] = useState('');
-  const activeTripKey = jobs.filter(job=>job.transportStatusKey==='in_transit').map(job=>job.id).join(',');
-  React.useEffect(()=>{
-    if(!activeTripKey)return undefined;
-    if(!navigator.geolocation){flash('This device does not support live location sharing.');return undefined;}
-    const watches=[];
-    for(const jobId of activeTripKey.split(',')){
-      let lastSent=0;
-      const watch=navigator.geolocation.watchPosition(position=>{
-        const now=Date.now();
-        if(now-lastSent<10000)return;
-        lastSent=now;
-        authRequest(`/transport/${jobId}/location`,{latitude:position.coords.latitude,longitude:position.coords.longitude,accuracy:position.coords.accuracy||0},'PATCH').catch(error=>console.error('Could not share transport location:',error));
-      },error=>{if(error.code===1)flash('Allow location access to share your live position with the farmer during delivery.');},{enableHighAccuracy:true,maximumAge:5000,timeout:20000});
-      watches.push(watch);
-    }
-    return ()=>watches.forEach(watch=>navigator.geolocation.clearWatch(watch));
-  },[activeTripKey]);
-  const counts = { new:requests.length, accepted:jobs.filter(job=>['Accepted','Scheduled'].includes(job.transportStatus)).length, active:jobs.filter(job=>['Picked up','In transit'].includes(job.transportStatus)).length, completed:jobs.filter(job=>job.transportStatus==='Delivered').length };
-  async function decision(job, action) {
+  const visibleRequests = demoRequests;
+  const visibleJobs = demoJobs;
+  const counts = { new:visibleRequests.length, accepted:visibleJobs.filter(job=>['Accepted','Scheduled'].includes(job.transportStatus)).length, active:visibleJobs.filter(job=>['Picked up','In transit'].includes(job.transportStatus)).length, completed:visibleJobs.filter(job=>job.transportStatus==='Delivered').length };
+  function decision(job, action) {
     setBusyId(job.id);
-    try {
-      const actionPin = action === 'accept' ? await requestActionPin('accept this delivery job') : null;
-      if (action === 'accept' && !actionPin) return;
-      await onDecision(job,action,actionPin);
-      flash(action==='accept'?'Transport job accepted. It is now in My Jobs.':'Request declined and released for other providers.');
+    if(action==='accept'){
+      const accepted={...job,transportStatus:'Accepted',transportStatusKey:'accepted',pickupAddress:`Pickup area: ${job.machineArea}`};
+      setDemoRequests(items=>items.filter(item=>item.id!==job.id));
+      setDemoJobs(items=>[accepted,...items]);
+      flash('Demo: transport request accepted and added to My Jobs.');
+    } else {
+      setDemoRequests(items=>items.filter(item=>item.id!==job.id));
+      flash('Demo: request declined.');
     }
-    catch(error) { flash(error.message||'Could not update that request.'); }
-    finally { setBusyId(''); }
+    setBusyId('');
   }
-  async function advance(job) {
+  function advance(job) {
     const next=transportNext[job.transportStatus]; if(!next)return;
     setBusyId(job.id);
-    try { await onStatus(job,next[0],deliveryNote[job.id]||''); flash(next[0]==='delivered'?'Delivery recorded. The farmer can now see it in their booking.':`Job updated: ${next[1].toLowerCase()}.`); }
-    catch(error) { flash(error.message||'Could not update this job.'); }
-    finally { setBusyId(''); }
+    const statusLabel={scheduled:'Scheduled',picked_up:'Picked up',in_transit:'In transit',delivered:'Delivered'}[next[0]];
+    setDemoJobs(items=>items.map(item=>item.id===job.id?{...item,transportStatus:statusLabel,transportStatusKey:next[0],deliveryNote:deliveryNote[job.id]||item.deliveryNote}:item));
+    flash(next[0]==='delivered'?'Demo: delivery recorded.':`Demo: job updated to ${next[1].toLowerCase()}.`);
+    setBusyId('');
+  }
+  function refreshDemo(){
+    setDemoRequests([
+      { id:'DEMO-TR-1042', machine:'Massey Ferguson 375', machineKind:'Tractor transport', machineArea:'Jos South', place:'Kuru, Jos South', date:demoDate, transportFee:35000, farmer:'A farmer in Jos South', farmerPhone:'', farmerEmail:'', transportRequirements:'Please call on arrival. The farm entrance is beside the market road.', note:'Delivery requested before afternoon.', transportStatus:'Awaiting provider', transportStatusKey:'pending' },
+      { id:'DEMO-TR-1043', machine:'Boom sprayer', machineKind:'Sprayer transport', machineArea:'Barkin Ladi', place:'Heipang, Barkin Ladi', date:demoDate, transportFee:28000, farmer:'A farmer in Barkin Ladi', farmerPhone:'', farmerEmail:'', transportRequirements:'Handle the spray equipment carefully.', note:'', transportStatus:'Awaiting provider', transportStatusKey:'pending' },
+    ]);
+    setDemoJobs([{ id:'DEMO-JOB-2081', machine:'John Deere 5075E', machineKind:'Tractor transport', machineArea:'Jos North', place:'Riyom', date:demoDate, transportFee:42000, farmer:'A farmer in Riyom', farmerPhone:'', farmerEmail:'', pickupAddress:'Pickup area: Jos North', transportRequirements:'Confirm arrival with the farmer.', note:'', transportStatus:'Scheduled', transportStatusKey:'scheduled' }]);
+    flash('Demo requests reset. Sample data is ready to explore.');
   }
   async function saveProfile(event) {
     event.preventDefault(); setProfileSaving(true); setProfileSaved('');
@@ -1156,10 +1154,11 @@ function LogisticsWorkspace({ page, user, requests, jobs, loading, onRefresh, on
     {assigned&&job.transportStatus==='In transit'&&<p className="transport-location-notice"><MapPin size={14}/> Live location sharing is active while this page stays open and location access is allowed.</p>}
     {!assigned?<div className="transport-card-actions"><button className="button button-ghost" disabled={busyId===job.id} onClick={()=>decision(job,'decline')}>Decline</button><button className="button button-primary" disabled={busyId===job.id} onClick={()=>decision(job,'accept')}>{busyId===job.id?'Saving…':'Accept job'} <ArrowRight size={14}/></button></div>:<div className="transport-card-actions transport-job-actions">{job.transportStatus==='In transit'&&<textarea aria-label="Delivery completion note" value={deliveryNote[job.id]??job.deliveryNote} maxLength={1000} rows="2" placeholder="Delivery note (optional)" onChange={event=>setDeliveryNote(value=>({...value,[job.id]:event.target.value}))}/>}<span className="transport-updated">Updated {job.transportStatus.toLowerCase()}</span>{transportNext[job.transportStatus]&&<button className="button button-primary" disabled={busyId===job.id} onClick={()=>advance(job)}>{busyId===job.id?'Saving…':transportNext[job.transportStatus][1]} <ArrowRight size={14}/></button>}</div>}</article>;
   if(page==='Settings') return <div className="view-stack logistics-workspace logistics-profile-page"><section className="panel logistics-profile-card"><PanelHead title="Transport business profile" subtitle="The details farmers and HadaLink use to match transport requests."/><form className="logistics-profile-form" onSubmit={saveProfile}><Field icon={Wrench} label="COMPANY / PROVIDER NAME" value={profile.businessName} required maxLength={140} onChange={event=>setProfile({...profile,businessName:event.target.value})}/><Field icon={User} label="CONTACT PERSON" value={profile.contactName} required maxLength={120} onChange={event=>setProfile({...profile,contactName:event.target.value})}/><Field icon={Mail} label="EMAIL ADDRESS" type="email" value={user?.email||''} readOnly/><NigerianPhoneField icon={MessageCircle} label="PHONE NUMBER" value={profile.phone} required onChange={phone=>setProfile({...profile,phone})}/><Field icon={MapPin} label="PRIMARY OPERATING AREA" value={profile.primaryArea} required maxLength={120} onChange={event=>setProfile({...profile,primaryArea:event.target.value})}/><label className="field"><span className="field-label">OTHER SERVICE AREAS</span><textarea value={profile.serviceAreas} rows="2" placeholder="Jos South, Barkin Ladi" onChange={event=>setProfile({...profile,serviceAreas:event.target.value})}/></label><label className="field"><span className="field-label">LOADS / MACHINERY TYPES</span><textarea value={profile.transportLoads} rows="2" placeholder="Tractors, harvesters, heavy equipment" onChange={event=>setProfile({...profile,transportLoads:event.target.value})}/></label><Field icon={Route} label="TRANSPORT CAPACITY" value={profile.transportCapacity} maxLength={160} placeholder="e.g. up to 10 tonnes" onChange={event=>setProfile({...profile,transportCapacity:event.target.value})}/><label className="field"><span className="field-label">VEHICLES</span><textarea value={profile.vehicleDetails} rows="2" placeholder="Vehicle type, flatbed / low-bed details" onChange={event=>setProfile({...profile,vehicleDetails:event.target.value})}/></label><div className="logistics-verification"><ShieldCheck size={16}/><span>Account verification is managed by HadaLink.</span><strong>Pending review</strong></div><div className="settings-actions"><button className="button button-primary" disabled={profileSaving}>{profileSaving?'Saving…':'Save profile'} <Check size={14}/></button></div>{profileSaved&&<p role="status" className="settings-help">{profileSaved}</p>}</form></section><ActionPinSettings user={user} onUserUpdated={onUserUpdated}/></div>;
-  if(page==='Requests') return <div className="view-stack logistics-workspace logistics-requests-page" aria-busy={loading}><PanelHead title="Transport requests" subtitle="Review pickup, delivery, schedule and HadaLink’s fixed fee before accepting." action={<button className="button button-ghost button-small" onClick={onRefresh}><ArrowDown size={14}/> Refresh</button>}/>{loading?<div className="panel empty-state">Loading available transport requests…</div>:requests.length?<div className="transport-list">{requests.map(job=>renderRequestCard(job))}</div>:<div className="panel empty-state"><Truck size={21}/><strong>No matching transport requests</strong><span>New requests in your operating areas will appear here when farmers select HadaLink transport.</span></div>}</div>;
-  if(page==='My Jobs') return <div className="view-stack logistics-workspace logistics-jobs-page" aria-busy={loading}><PanelHead title="My transport jobs" subtitle="Move each accepted job through scheduled pickup, collection, transit and delivery." action={<button className="button button-ghost button-small" onClick={onRefresh}><ArrowDown size={14}/> Refresh</button>}/>{loading?<div className="panel empty-state">Loading your jobs…</div>:jobs.length?<div className="transport-list">{jobs.map(job=>renderRequestCard(job,true))}</div>:<div className="panel empty-state"><Truck size={21}/><strong>No transport jobs yet</strong><span>Accepted assignments will be listed here.</span></div>}</div>;
-  const recent=jobs.slice(0,4);
-  return <div className="view-stack logistics-workspace logistics-dashboard" aria-busy={loading}><section className="logistics-welcome panel"><span className="eyebrow">LOGISTICS PROVIDER · PLATEAU STATE</span><h2>Transport jobs, clearly managed.</h2><p>Review matching requests, accept jobs at HadaLink’s fixed fee, and keep farmers informed through delivery.</p><button className="button button-primary" onClick={()=>go('Requests')}>View requests <ArrowRight size={14}/></button></section><section className="metric-grid logistics-metrics"><Metric label="NEW REQUESTS" value={loading?'—':String(counts.new)} detail={<><ClipboardList size={13}/> In your service areas</>} icon={ClipboardList}/><Metric label="ACCEPTED / SCHEDULED" value={loading?'—':String(counts.accepted)} detail={<><CalendarDays size={13}/> Awaiting pickup</>} icon={CalendarDays} tone="orange"/><Metric label="ACTIVE DELIVERIES" value={loading?'—':String(counts.active)} detail={<><Truck size={13}/> Picked up or in transit</>} icon={Truck} tone="blue"/><Metric label="COMPLETED JOBS" value={loading?'—':String(counts.completed)} detail={<><CheckCircle2 size={13}/> Delivery recorded</>} icon={CheckCircle2}/></section><section className="panel transport-list-section"><PanelHead title="Recent job updates" subtitle="Status changes from your assigned transport jobs." action={<button className="button button-ghost button-small" onClick={()=>go('My Jobs')}>My jobs <ArrowRight size={13}/></button>}/>{loading?<div className="empty-state">Loading recent updates…</div>:recent.length?<div className="transport-list">{recent.map(job=><article className="transport-update-row" key={job.id}><span className="tracking-icon"><Truck size={16}/></span><div><strong>{job.machine}</strong><small>{job.place} · {job.transportStatus}</small></div><span className="transport-fee">₦{job.transportFee.toLocaleString('en-NG')}</span></article>)}</div>:<div className="empty-state">Job updates will appear here after you accept a request.</div>}</section><section className="panel logistics-shortcut"><div><h3>Keep your service areas current</h3><p>Request matching uses your profile's operating areas and the machinery pickup / farm location.</p></div><button className="button button-ghost" onClick={()=>go('Settings')}>Edit profile <ArrowRight size={13}/></button></section></div>;
+  const demoNotice=<div className="logistics-demo-notice"><Truck size={15}/><span><strong>Logistics workflow demo</strong><small>Sample requests and job updates are for preview. Changes here stay in this browser and do not affect live bookings.</small></span><span className="logistics-demo-badge">DEMO</span></div>;
+  if(page==='Requests') return <div className="view-stack logistics-workspace logistics-requests-page"><PanelHead title="Transport requests" subtitle="Review pickup, delivery, schedule and HadaLink’s fixed fee before accepting." action={<button className="button button-ghost button-small" onClick={refreshDemo}><ArrowDown size={14}/> Refresh demo</button>}/>{demoNotice}{visibleRequests.length?<div className="transport-list">{visibleRequests.map(job=>renderRequestCard(job))}</div>:<div className="panel empty-state"><CheckCircle2 size={21}/><strong>All demo requests reviewed</strong><span>Refresh the demo to reset the sample requests.</span><button className="button button-ghost button-small" onClick={()=>{setDemoRequests([{id:'DEMO-TR-1042',machine:'Massey Ferguson 375',machineKind:'Tractor transport',machineArea:'Jos South',place:'Kuru, Jos South',date:demoDate,transportFee:35000,farmer:'A farmer in Jos South',transportRequirements:'Please call on arrival. The farm entrance is beside the market road.',note:'Delivery requested before afternoon.',transportStatus:'Awaiting provider',transportStatusKey:'pending'},{id:'DEMO-TR-1043',machine:'Boom sprayer',machineKind:'Sprayer transport',machineArea:'Barkin Ladi',place:'Heipang, Barkin Ladi',date:demoDate,transportFee:28000,farmer:'A farmer in Barkin Ladi',transportRequirements:'Handle the spray equipment carefully.',note:'',transportStatus:'Awaiting provider',transportStatusKey:'pending'}]);refreshDemo()}}>Reset sample requests</button></div>}</div>;
+  if(page==='My Jobs') return <div className="view-stack logistics-workspace logistics-jobs-page"><PanelHead title="My transport jobs" subtitle="Move each accepted job through scheduled pickup, collection, transit and delivery." action={<button className="button button-ghost button-small" onClick={refreshDemo}><ArrowDown size={14}/> Refresh demo</button>}/>{demoNotice}{visibleJobs.length?<div className="transport-list">{visibleJobs.map(job=>renderRequestCard(job,true))}</div>:<div className="panel empty-state"><Truck size={21}/><strong>No demo jobs yet</strong><span>Accept a sample request to see it appear here.</span><button className="button button-ghost button-small" onClick={()=>go('Requests')}>View sample requests</button></div>}</div>;
+  const recent=visibleJobs.slice(0,4);
+  return <div className="view-stack logistics-workspace logistics-dashboard"><section className="logistics-welcome panel"><span className="eyebrow">LOGISTICS PROVIDER · PLATEAU STATE</span><h2>Transport jobs, clearly managed.</h2><p>Review a request, accept the job, then move it through pickup, transit and delivery.</p><button className="button button-primary" onClick={()=>go('Requests')}>Explore sample requests <ArrowRight size={14}/></button></section>{demoNotice}<section className="metric-grid logistics-metrics"><Metric label="NEW REQUESTS" value={String(counts.new)} detail={<><ClipboardList size={13}/> In your service areas</>} icon={ClipboardList}/><Metric label="ACCEPTED / SCHEDULED" value={String(counts.accepted)} detail={<><CalendarDays size={13}/> Awaiting pickup</>} icon={CalendarDays} tone="orange"/><Metric label="ACTIVE DELIVERIES" value={String(counts.active)} detail={<><Truck size={13}/> Picked up or in transit</>} icon={Truck} tone="blue"/><Metric label="COMPLETED JOBS" value={String(counts.completed)} detail={<><CheckCircle2 size={13}/> Delivery recorded</>} icon={CheckCircle2}/></section><section className="panel transport-list-section"><PanelHead title="Recent job updates" subtitle="Updates from the sample transport workflow." action={<button className="button button-ghost button-small" onClick={()=>go('My Jobs')}>My jobs <ArrowRight size={13}/></button>}/>{recent.length?<div className="transport-list">{recent.map(job=><article className="transport-update-row" key={job.id}><span className="tracking-icon"><Truck size={16}/></span><div><strong>{job.machine}</strong><small>{job.place} · {job.transportStatus}</small></div><span className="transport-fee">₦{job.transportFee.toLocaleString('en-NG')}</span></article>)}</div>:<div className="empty-state">Accept a sample request to see job updates here.</div>}</section><section className="panel logistics-shortcut"><div><h3>Keep your service areas current</h3><p>Request matching uses your profile's operating areas and the machinery pickup / farm location.</p></div><button className="button button-ghost" onClick={()=>go('Settings')}>Edit profile <ArrowRight size={13}/></button></section></div>;
 }
 
 function Dashboard({ go, machinesState, requestsState, flash, loading = false, error = '' }) {
