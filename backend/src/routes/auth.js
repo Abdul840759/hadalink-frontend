@@ -293,8 +293,8 @@ router.patch('/profile', requireAuth, async (request, response) => {
     ? value.length > 10 || value.some(area => area.length < 2 || area.length > (field === 'transportLoads' ? 80 : 120))
     : value.length > maxLengths[field])) return response.status(400).json({ error: 'One or more profile details are invalid or too long.' });
   for (const field of ['phone', 'whatsapp']) {
-    if (Object.hasOwn(updates, field) && (updates[field].length < 7 || !/^[+\d()\s.-]+$/.test(updates[field]))) {
-      return response.status(400).json({ error: `Enter a valid ${field === 'phone' ? 'phone' : 'WhatsApp'} number.` });
+    if (Object.hasOwn(updates, field) && !/^\+234\d{10}$/.test(updates[field])) {
+      return response.status(400).json({ error: `Enter a Nigerian ${field === 'phone' ? 'phone' : 'WhatsApp'} number with 10 digits after +234.` });
     }
   }
   for (const field of ['businessName', 'contactName', 'primaryArea']) {
