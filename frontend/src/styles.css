@@ -1795,4 +1795,16 @@ button,.button,input,select,textarea{line-height:1.4}
 /* Keep headings and supporting copy readable on every light-theme workspace card. */
 :root[data-theme="light"] .workspace .panel-head h2{color:#17271d}
 :root[data-theme="light"] .workspace .panel-head>div>p{color:#536b5b}
+.appearance-settings{display:grid;grid-template-columns:minmax(0,1fr) minmax(190px,260px);align-items:center;gap:16px}
+.appearance-copy{display:flex;align-items:center;gap:12px;min-width:0}
+.appearance-icon{display:grid;width:38px;height:38px;flex:none;place-items:center;border:1px solid var(--line2);border-radius:11px;background:var(--surface);color:var(--green)}
+.appearance-copy h2{margin:0;color:var(--white);font:700 13px/1.4 var(--display)}
+.appearance-copy p{margin:4px 0 0;color:var(--muted);font-size:11px;line-height:1.5}
+.appearance-choice{display:grid;gap:6px;color:var(--muted);font-size:10px;font-weight:700}
+.appearance-choice select{width:100%;min-height:38px;padding:0 11px;border:1px solid var(--line2);border-radius:8px;background:var(--surface);color:var(--white)}
+.appearance-status{grid-column:1/-1;color:var(--green);font-size:10px}
+:root[data-theme="light"] .appearance-settings .appearance-copy h2{color:#17271d}
+:root[data-theme="light"] .appearance-settings .appearance-copy p,:root[data-theme="light"] .appearance-choice{color:#536b5b}
+:root[data-theme="light"] .appearance-choice select{border-color:#cbdacf;background:#fff;color:#17271d}
+@media(max-width:540px){.appearance-settings{grid-template-columns:1fr;gap:12px}.appearance-choice{max-width:none}}
 @media(max-width:540px){.pin-code-boxes{gap:5px}.pin-code-boxes input{height:36px;font-size:16px}.pin-code-control{gap:5px;padding:5px}.pin-visibility-toggle{width:32px;height:32px}.action-pin-settings-form .settings-actions>.button{flex:1 1 100%}}

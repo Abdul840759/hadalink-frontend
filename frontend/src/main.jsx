@@ -1,7 +1,7 @@
 import React, { Suspense, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { createRoot } from 'react-dom/client';
-import { ArrowLeft, ArrowRight, Bell, CalendarDays, Check, CheckCircle2, ChevronDown, CircleHelp, ClipboardPaste, Download, Home, LogOut, Menu, MessageCircle, Plus, Search, Settings, ShieldCheck, Sprout, Tractor, Wallet, X, ArrowDown, ArrowUpRight, BadgeCheck, Banknote, BarChart3, Camera, ChevronLeft, ChevronRight, Clock3, CreditCard, Eye, EyeOff, Filter, Gauge, Globe2, Image, Leaf, LockKeyhole, Mail, MapPin, SlidersHorizontal, Star, TrendingUp, Upload, User, Users, Wrench, Sun, Moon, Truck, ClipboardList, Route } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Bell, CalendarDays, Check, CheckCircle2, ChevronDown, CircleHelp, ClipboardPaste, Download, Home, LogOut, Menu, MessageCircle, Plus, Search, Settings, ShieldCheck, Sprout, Tractor, Wallet, X, ArrowDown, ArrowUpRight, BadgeCheck, Banknote, BarChart3, Camera, ChevronLeft, ChevronRight, Clock3, CreditCard, Eye, EyeOff, Filter, Gauge, Globe2, Image, Leaf, LockKeyhole, Mail, MapPin, SlidersHorizontal, Star, TrendingUp, Upload, User, Users, Wrench, Sun, Moon, Truck, ClipboardList, Route, Monitor } from 'lucide-react';
 import './styles.css';
 
 // Keep the charting package out of the initial app bundle. It is only needed
@@ -357,18 +357,36 @@ function App() {
   const [actionPinRequest, setActionPinRequest] = useState(null);
   const [onboardingRequired, setOnboardingRequired] = useState(null);
   const [signupRole, setSignupRole] = useState(() => ['Provider','Logistics'].includes(localStorage.getItem('hadalink-role')) ? localStorage.getItem('hadalink-role') : 'Farmer');
-  const [theme, setTheme] = useState(() => {
+  const [themePreference, setThemePreference] = useState(() => {
+    const stored = localStorage.getItem('hadalink-theme-preference');
+    if (['light', 'dark', 'system'].includes(stored)) return stored;
     if (localStorage.getItem('hadalink-theme-default-v2') !== '1') {
       localStorage.setItem('hadalink-theme-default-v2', '1');
       localStorage.setItem('hadalink-theme', 'light');
       return 'light';
     }
-    return localStorage.getItem('hadalink-theme') || 'light';
+    return localStorage.getItem('hadalink-theme') === 'dark' ? 'dark' : 'light';
+  });
+  const [theme, setTheme] = useState(() => {
+    const preference = localStorage.getItem('hadalink-theme-preference') || (localStorage.getItem('hadalink-theme-default-v2') === '1' ? localStorage.getItem('hadalink-theme') : 'light') || 'light';
+    return preference === 'system' ? (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : preference;
   });
   const isFarmer = signupRole === 'Farmer';
   const isLogistics = signupRole === 'Logistics';
   const quickNavItems = isFarmer ? farmerNav : isLogistics ? logisticsNav : providerQuickNav;
-  const toggleTheme = () => setTheme(value => value === 'dark' ? 'light' : 'dark');
+  async function chooseThemePreference(preference) {
+    if (!['light', 'dark', 'system'].includes(preference)) return;
+    setThemePreference(preference);
+    localStorage.setItem('hadalink-theme-preference', preference);
+    if (!currentUser) return;
+    try {
+      const { data } = await authRequest('/auth/theme', { themePreference: preference }, 'PATCH');
+      setCurrentUser(data.user);
+    } catch (error) {
+      throw new Error(`Theme changed on this device but could not be saved to your account. ${error.message || ''}`.trim());
+    }
+  }
+  const toggleTheme = () => { void chooseThemePreference(theme === 'dark' ? 'light' : 'dark').catch(error => flash(error.message)); };
   const publicPages = ['landing', 'About', 'login', 'register', 'forgot'];
   function requestActionPin(action) {
     return new Promise(resolve => setActionPinRequest({ hasActionPin: currentUser?.hasActionPin === true, role: currentUser?.role, email: currentUser?.email, action, resolve }));
@@ -449,7 +467,29 @@ function App() {
       setPage('Dashboard');
     }
   }, [page, signupRole]);
-  React.useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem('hadalink-theme', theme); }, [theme]);
+  React.useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const apply = () => {
+      const resolved = themePreference === 'system' ? (media.matches ? 'dark' : 'light') : themePreference;
+      setTheme(resolved);
+      document.documentElement.dataset.theme = resolved;
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolved === 'dark' ? '#06150e' : '#f3f7f3');
+      localStorage.setItem('hadalink-theme', resolved);
+      localStorage.setItem('hadalink-theme-preference', themePreference);
+    };
+    apply();
+    if (themePreference !== 'system') return undefined;
+    media.addEventListener?.('change', apply);
+    return () => media.removeEventListener?.('change', apply);
+  }, [themePreference]);
+  React.useEffect(() => {
+    if (!currentUser) return;
+    if (['light', 'dark', 'system'].includes(currentUser.themePreference)) {
+      setThemePreference(currentUser.themePreference);
+      return;
+    }
+    void chooseThemePreference(themePreference).catch(error => console.warn(error.message));
+  }, [currentUser?.id]);
   function go(p, payload) { if (p === 'Edit Machinery') setEditingMachine(payload || providerListings.find(item=>item.id===location.pathname.split('/').pop()) || null); if (['Farmer', 'Provider', 'Logistics'].includes(payload)) { setSignupRole(payload); localStorage.setItem('hadalink-role', payload); } setPage(p); setNotice(''); setMobileNav(false); setMobileMoreOpen(false); const route=p==='landing'?'/':p==='About'?'/about':p==='login'?'/login':p==='register'?'/register':p==='forgot'?'/forgot-password':`/app/${({'Dashboard':'dashboard','Find Machinery':'find','My bookings':'bookings','Track machinery':'tracking','My Machinery':'machinery','Add Machinery':'add','Edit Machinery':`machinery/edit/${payload?._id||payload?.id||''}`,'Requests':'requests','My Jobs':'jobs','Calendar':'calendar','Analytics':'analytics','Earnings':'earnings','Reviews':'reviews','Settings':'settings'}[p]||'dashboard')}`; history.pushState({page:p},'',route); window.scrollTo(0,0); }
   React.useEffect(()=>{const f=()=>{const p=location.pathname.split('/').filter(Boolean);setPage(p[0]==='app'?(p[1]==='machinery'&&p[2]==='edit'?'Edit Machinery':({machinery:'My Machinery',add:'Add Machinery',requests:'Requests',jobs:'My Jobs',calendar:'Calendar',analytics:'Analytics',earnings:'Earnings',reviews:'Reviews',settings:'Settings',find:'Find Machinery',bookings:'My bookings',tracking:'Track machinery'}[p[1]]||'Dashboard')):({about:'About',login:'login',register:'register',forgot:'forgot'}[p[0]]||'landing'))};window.addEventListener('popstate',f);return()=>window.removeEventListener('popstate',f)},[]);
   React.useEffect(()=>{
@@ -537,11 +577,30 @@ function App() {
     {page==='Calendar'&&<CalendarPage month={month} setMonth={setMonth} year={calendarYear} setYear={setCalendarYear} requestsState={requestsState} machinesState={providerListings}/>}
     {page==='Analytics'&&<Analytics machinesState={isFarmer?machinesState:providerListings} requestsState={requestsState}/>}{page==='Earnings'&&<Earnings requestsState={requestsState}/>}
     {page==='Reviews'&&<Reviews requestsState={requestsState}/>}
+    {page==='Settings'&&<ThemePreferenceSettings preference={themePreference} onChange={chooseThemePreference}/>}
     {!isLogistics&&page==='Settings'&&<SettingsPage flash={flash} currentUser={currentUser} onUserUpdated={setCurrentUser}/>}
     <footer className="workspace-footer"><span>© {new Date().getFullYear()} HadaLink · Supporting Plateau State agriculture</span><span><ShieldCheck size={13}/> Bookings coordinated locally <span className="footer-dot">·</span> Jos, Nigeria</span></footer></main></div></div>;
 }
 
 function ThemeToggle({ theme, onToggle }) { return <button type="button" className="theme-toggle" onClick={onToggle} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? <Sun size={15}/> : <Moon size={15}/>}<span>{theme === 'dark' ? 'Light' : 'Dark'}</span></button> }
+
+function ThemePreferenceSettings({ preference, onChange }) {
+  const [message, setMessage] = useState('');
+  async function save(event) {
+    const next = event.target.value;
+    setMessage('Saving preference…');
+    try {
+      await onChange(next);
+      setMessage('Theme preference saved to your account.');
+    } catch (error) {
+      setMessage(error.message || 'Theme preference could not be saved.');
+    }
+  }
+  const description = preference === 'system'
+    ? 'HadaLink follows the light or dark appearance selected on this device.'
+    : `HadaLink uses ${preference} mode on all devices where you sign in.`;
+  return <section className="panel appearance-settings"><div className="appearance-copy"><span className="appearance-icon">{preference === 'system' ? <Monitor size={17}/> : preference === 'dark' ? <Moon size={17}/> : <Sun size={17}/>}</span><div><h2>Appearance</h2><p>{description}</p></div></div><label className="appearance-choice"><span>Theme preference</span><select value={preference} onChange={save} aria-label="Theme preference"><option value="light">Light</option><option value="dark">Dark</option><option value="system">Use device theme</option></select></label>{message&&<small className="appearance-status" role="status">{message}</small>}</section>;
+}
 
 function PublicNav({ go, theme, toggleTheme, about = false }) {
   const [menuOpen,setMenuOpen]=useState(false);

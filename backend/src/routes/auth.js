@@ -215,6 +215,16 @@ router.post('/google', authLimiter, requireTurnstile, async (request, response) 
 
 router.get('/me', requireAuth, (request, response) => response.json({ data: { user: publicUser(request.user) } }));
 
+router.patch('/theme', requireAuth, async (request, response) => {
+  const themePreference = request.body?.themePreference;
+  if (!['light', 'dark', 'system'].includes(themePreference)) {
+    return response.status(400).json({ error: 'Choose light, dark, or device theme.' });
+  }
+  request.user.themePreference = themePreference;
+  await request.user.save();
+  return response.json({ data: { user: publicUser(request.user) } });
+});
+
 router.post('/action-pin/request-code', requireAuth, actionPinLimiter, actionPinCodeLimiter, async (request, response) => {
   const pin = request.body?.pin;
   const confirmation = request.body?.confirmation;

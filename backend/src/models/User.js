@@ -13,6 +13,7 @@ const userSchema = new mongoose.Schema({
   actionPinHash: { type: String, select: false },
   actionPinSetAt: { type: Date },
   role: { type: String, enum: ['farmer', 'provider', 'logistics'], required: true },
+  themePreference: { type: String, enum: ['light', 'dark', 'system'] },
   identities: { type: [authIdentitySchema], default: [] },
   profile: {
     phone: { type: String, trim: true, maxlength: 32 },
