@@ -380,6 +380,7 @@ button,a,input,select,textarea{-webkit-tap-highlight-color:transparent;touch-act
 .nav-item:active,.button:active,.filter-chip:active,.icon-button:active,.date-chip:active,.user-chip:active,.auth-submit:active,.role-option:active,.social-row>button:active{transform:scale(.98)}
 .hero-content,.page-heading,.auth-form-side{animation:surface-enter .48s cubic-bezier(.2,.75,.25,1) both}
 .panel,.metric-card,.machine-card,.review-card,.landing-machine{animation:card-enter .45s cubic-bezier(.2,.75,.25,1) both}
+.logistics-workspace .panel,.logistics-workspace .metric-card{animation:none!important}
 @keyframes surface-enter{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:translateY(0)}}
 @keyframes card-enter{from{opacity:.75;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
 @media(max-width:720px){
