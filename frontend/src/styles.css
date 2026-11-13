@@ -1343,6 +1343,36 @@ img,video{max-width:100%}
 
 html{scroll-padding-top:76px;scrollbar-gutter:stable}
 @media(max-width:680px){html{scrollbar-gutter:auto}}
+
+/* Logistics gets an isolated shell so its sample workflow cannot inherit marketplace loading states. */
+.logistics-shell .logistics-topbar{justify-content:flex-end}
+.logistics-account{display:flex;align-items:center;gap:10px;min-width:0;margin-right:auto}
+.logistics-account>span:last-child{display:grid;min-width:0;gap:3px}
+.logistics-account strong,.logistics-account small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.logistics-account strong{max-width:min(35vw,260px);font-size:11px;color:var(--white)}
+.logistics-account small{max-width:min(42vw,320px);font-size:9px;color:var(--muted)}
+.logistics-logout-top{flex:none}
+.logistics-floating-nav{display:none}
+.logistics-shell .workspace{padding-bottom:24px}
+@media(max-width:900px){
+ .logistics-shell .sidebar{z-index:42}
+ .logistics-shell .mobile-backdrop{z-index:41}
+ .logistics-shell .logistics-mobile-menu{display:flex;flex:none;width:40px;height:40px;align-items:center;justify-content:center;padding:0;border:1px solid var(--line2);border-radius:11px;background:var(--surface);color:var(--white)}
+ .logistics-shell .logistics-topbar{justify-content:flex-start}
+ .logistics-shell .logistics-account{flex:1}
+}
+@media(max-width:680px){
+ .logistics-shell .logistics-mobile-menu{display:none}
+ .logistics-shell .logistics-account{gap:7px}
+ .logistics-shell .logistics-account .avatar-logo{width:32px;height:32px}
+ .logistics-shell .logistics-account strong{max-width:42vw;font-size:10px}
+ .logistics-shell .logistics-account small{max-width:45vw;font-size:8px}
+ .logistics-shell .logistics-logout-top{min-height:34px;padding:0 8px;font-size:9px}
+ .logistics-shell .logistics-logout-top svg{width:13px}
+ .logistics-floating-nav{display:flex}
+ .logistics-shell .workspace{padding-bottom:calc(90px + env(safe-area-inset-bottom,0px))}
+ .logistics-shell .workspace-footer{padding-bottom:10px}
+}
 button,a,input,select,textarea{-webkit-tap-highlight-color:transparent}
 button,.button,.nav-item,.filter-chip,.mobile-quick-nav-item,.public-menu-toggle{touch-action:manipulation}
 .page-heading h1,.section-heading h2,.about-hero-copy h1,.hero-content>h1{text-wrap:balance}
