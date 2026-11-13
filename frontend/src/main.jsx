@@ -265,9 +265,43 @@ function WeekNavigator({ weekOffset, setWeekOffset }) {
   </div>;
 }
 
+const emptyPinDigits = () => Array(6).fill('');
+const pinDigitsToString = digits => digits.join('');
+
+function PinCodeField({ label, value, onChange, masked = true, autoFocus = false, disabled = false }) {
+  const [visible, setVisible] = useState(!masked);
+  const inputs = React.useRef([]);
+  function writeDigits(start, raw) {
+    const digits = String(raw || '').replace(/\D/g, '').slice(0, 6 - start);
+    if (!digits) return;
+    const next = [...value];
+    digits.split('').forEach((digit, offset) => { next[start + offset] = digit; });
+    onChange(next);
+    inputs.current[Math.min(5, start + digits.length)]?.focus();
+  }
+  function editDigit(index, raw) {
+    const digits = String(raw || '').replace(/\D/g, '');
+    if (!digits) {
+      const next = [...value];
+      next[index] = '';
+      onChange(next);
+      return;
+    }
+    writeDigits(index, digits);
+  }
+  function onKeyDown(index, event) {
+    if (event.key === 'Backspace' && !value[index] && index > 0) inputs.current[index - 1]?.focus();
+    if (event.key === 'ArrowLeft' && index > 0) { event.preventDefault(); inputs.current[index - 1]?.focus(); }
+    if (event.key === 'ArrowRight' && index < 5) { event.preventDefault(); inputs.current[index + 1]?.focus(); }
+  }
+  return <div className="pin-code-field"><span className="field-label">{label}</span><div className="pin-code-control"><div className="pin-code-boxes" role="group" aria-label={label}>{value.map((digit, index)=><input key={index} ref={node=>{inputs.current[index]=node}} type={masked&&!visible?'password':'text'} inputMode="numeric" pattern="[0-9]" maxLength={1} autoComplete="off" aria-label={`${label}, digit ${index+1} of 6`} value={digit} onChange={event=>editDigit(index,event.target.value)} onKeyDown={event=>onKeyDown(index,event)} onPaste={event=>{event.preventDefault();writeDigits(index,event.clipboardData.getData('text'))}} onFocus={event=>event.currentTarget.select()} autoFocus={autoFocus&&index===0} disabled={disabled} required/>)}</div>{masked&&<button type="button" className="pin-visibility-toggle" aria-label={visible?`Hide ${label.toLowerCase()}`:`Show ${label.toLowerCase()}`} aria-pressed={visible} onClick={()=>setVisible(value=>!value)}>{visible?<EyeOff size={17}/>:<Eye size={17}/>}</button>}</div></div>;
+}
+
 function ActionPinDialog({ request, onUserUpdated, onFinish }) {
-  const [pin, setPin] = useState('');
-  const [confirmation, setConfirmation] = useState('');
+  const [pin, setPin] = useState(emptyPinDigits);
+  const [confirmation, setConfirmation] = useState(emptyPinDigits);
+  const [code, setCode] = useState(emptyPinDigits);
+  const [codeSent, setCodeSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   async function submit(event) {
@@ -275,17 +309,21 @@ function ActionPinDialog({ request, onUserUpdated, onFinish }) {
     setBusy(true); setError('');
     try {
       if (request.hasActionPin) {
-        await authRequest('/auth/verify-action-pin', { pin });
+        await authRequest('/auth/verify-action-pin', { pin: pinDigitsToString(pin) });
+        onFinish(pinDigitsToString(pin));
+      } else if (!codeSent) {
+        await authRequest('/auth/action-pin/request-code', { pin: pinDigitsToString(pin), confirmation: pinDigitsToString(confirmation) });
+        setCodeSent(true);
       } else {
-        const { data } = await authRequest('/auth/action-pin', { pin, confirmation });
+        const { data } = await authRequest('/auth/action-pin', { pin: pinDigitsToString(pin), confirmation: pinDigitsToString(confirmation), code: pinDigitsToString(code) });
         onUserUpdated(data.user);
+        onFinish(pinDigitsToString(pin));
       }
-      onFinish(pin);
     } catch (requestError) { setError(requestError.message || 'The action PIN could not be confirmed.'); }
     finally { setBusy(false); }
   }
   const cancel = () => onFinish(null);
-  return createPortal(<div className="action-pin-backdrop" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)cancel()}}><section className="action-pin-dialog" role="dialog" aria-modal="true" aria-labelledby="action-pin-title"><header><span className="action-pin-icon"><LockKeyhole size={18}/></span><button type="button" aria-label="Cancel protected action" onClick={cancel}><X size={17}/></button></header><span className="eyebrow">{request.role?.toUpperCase()} ACTION PIN</span><h2 id="action-pin-title">{request.hasActionPin?'Enter your action PIN':'Create your action PIN'}</h2><p>{request.hasActionPin?`Confirm your PIN to ${request.action}.`:`Before you ${request.action}, create a six-digit PIN for your ${request.role} account. You can change it later in Settings.`}</p><form onSubmit={submit}><label className="field"><span className="field-label">{request.hasActionPin?'ACTION PIN':'CREATE SIX-DIGIT PIN'}</span><span className="field-control"><LockKeyhole size={16}/><input type="password" inputMode="numeric" pattern="[0-9]{6}" autoComplete={request.hasActionPin?'current-password':'new-password'} minLength={6} maxLength={6} value={pin} onChange={event=>setPin(event.target.value.replace(/\D/g,'').slice(0,6))} required autoFocus placeholder="••••••"/></span></label>{!request.hasActionPin&&<label className="field"><span className="field-label">CONFIRM PIN</span><span className="field-control"><LockKeyhole size={16}/><input type="password" inputMode="numeric" pattern="[0-9]{6}" autoComplete="new-password" minLength={6} maxLength={6} value={confirmation} onChange={event=>setConfirmation(event.target.value.replace(/\D/g,'').slice(0,6))} required placeholder="Enter the same PIN"/></span></label>}{error&&<div className="auth-error" role="alert">{error}</div>}<div className="action-pin-actions"><button type="button" className="button button-ghost" onClick={cancel}>Cancel</button><button className="button button-primary" disabled={busy}>{busy?(request.hasActionPin?'Checking…':'Saving…'):(request.hasActionPin?'Confirm action':'Save PIN and continue')} <ArrowRight size={14}/></button></div></form></section></div>,document.body);
+  return createPortal(<div className="action-pin-backdrop" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)cancel()}}><section className="action-pin-dialog" role="dialog" aria-modal="true" aria-labelledby="action-pin-title"><header><span className="action-pin-icon"><LockKeyhole size={18}/></span><button type="button" aria-label="Cancel protected action" onClick={cancel}><X size={17}/></button></header><span className="eyebrow">{request.role?.toUpperCase()} ACTION PIN</span><h2 id="action-pin-title">{request.hasActionPin?'Enter your action PIN':codeSent?'Verify your email':'Create your action PIN'}</h2><p>{request.hasActionPin?`Enter your PIN to ${request.action}.`:codeSent?`Enter the six-digit code sent to ${request.email} to save your PIN and continue.`:`Create a six-digit PIN for your ${request.role} account before you ${request.action}. We’ll email a code to ${request.email} before saving it.`}</p><form onSubmit={submit}>{request.hasActionPin?<PinCodeField label="ACTION PIN" value={pin} onChange={setPin} autoFocus/>:codeSent?<PinCodeField label="EMAIL VERIFICATION CODE" value={code} onChange={setCode} masked={false} autoFocus/>:<><PinCodeField label="CREATE SIX-DIGIT PIN" value={pin} onChange={setPin} autoFocus/><PinCodeField label="CONFIRM PIN" value={confirmation} onChange={setConfirmation}/></>}{error&&<div className="auth-error" role="alert">{error}</div>}<div className="action-pin-actions"><button type="button" className="button button-ghost" onClick={cancel}>Cancel</button><button className="button button-primary" disabled={busy}>{busy?(request.hasActionPin?'Checking…':codeSent?'Saving…':'Sending code…'):(request.hasActionPin?'Confirm action':codeSent?'Verify & continue':'Email code & continue')} <ArrowRight size={14}/></button></div></form></section></div>,document.body);
 }
 
 function App() {
@@ -319,14 +357,21 @@ function App() {
   const [actionPinRequest, setActionPinRequest] = useState(null);
   const [onboardingRequired, setOnboardingRequired] = useState(null);
   const [signupRole, setSignupRole] = useState(() => ['Provider','Logistics'].includes(localStorage.getItem('hadalink-role')) ? localStorage.getItem('hadalink-role') : 'Farmer');
-  const [theme, setTheme] = useState(() => localStorage.getItem('hadalink-theme') || 'dark');
+  const [theme, setTheme] = useState(() => {
+    if (localStorage.getItem('hadalink-theme-default-v2') !== '1') {
+      localStorage.setItem('hadalink-theme-default-v2', '1');
+      localStorage.setItem('hadalink-theme', 'light');
+      return 'light';
+    }
+    return localStorage.getItem('hadalink-theme') || 'light';
+  });
   const isFarmer = signupRole === 'Farmer';
   const isLogistics = signupRole === 'Logistics';
   const quickNavItems = isFarmer ? farmerNav : isLogistics ? logisticsNav : providerQuickNav;
   const toggleTheme = () => setTheme(value => value === 'dark' ? 'light' : 'dark');
   const publicPages = ['landing', 'About', 'login', 'register', 'forgot'];
   function requestActionPin(action) {
-    return new Promise(resolve => setActionPinRequest({ hasActionPin: currentUser?.hasActionPin === true, role: currentUser?.role, action, resolve }));
+    return new Promise(resolve => setActionPinRequest({ hasActionPin: currentUser?.hasActionPin === true, role: currentUser?.role, email: currentUser?.email, action, resolve }));
   }
   React.useEffect(() => {
     if (publicPages.includes(page) || currentUser || authBootstrapInFlight.current) return undefined;
@@ -1233,26 +1278,41 @@ function Reviews({ requestsState }) {
   </div><div className="reviews-layout"><section className="review-list">{records.length ? records.map(request=><article className="panel review-card" key={request.id}><div className="review-header"><span className="review-avatar">{request.farmer.split(' ').map(part=>part[0]).join('')}</span><span className="review-person"><strong>{request.farmer}</strong><small><MapPin size={12}/>{request.place} · hired {request.machine}</small></span><span className="review-stars"><span>{'★'.repeat(request.rating)}{'☆'.repeat(5-request.rating)}</span><small>{request.date}</small></span></div><span className="review-verified"><CheckCircle2 size={13}/> COMPLETED BOOKING RECORD</span><blockquote>“{request.review}”</blockquote><div className="review-footer"><span>Feedback shared after the recorded booking.</span>{request.farmerEmail ? <a className="button button-ghost button-small" href={`mailto:${encodeURIComponent(request.farmerEmail)}?subject=${encodeURIComponent(`HadaLink booking ${request.id}`)}`}><Mail size={13}/> Email farmer</a> : <span className="review-contact-unavailable">Farmer email unavailable</span>}</div></article>) : <div className="panel empty-state"><Star size={20}/><strong>No farmer reviews recorded yet</strong><span>Completed bookings can receive feedback from the farmer dashboard.</span></div>}</section><aside className="view-stack"><section className="panel equipment-reviews"><PanelHead title="Equipment ratings" subtitle="Calculated from reviews linked to completed bookings."/>{byMachine.length ? byMachine.map(group=><div className="equipment-review" key={group.machine}><span>{group.machine}</span><strong>{(group.total/group.count).toFixed(1)} <Star size={12} fill="currentColor"/></strong><small>{group.count} recorded {group.count===1?'review':'reviews'}</small></div>) : <p className="empty-state">Ratings appear here when completed bookings receive reviews.</p>}</section><section className="panel guarantee-panel"><ShieldCheck size={23}/><h3>Trust through clear records</h3><p>Provider details, agreed terms, completed booking records and farmer reviews help people make informed decisions. A listing is not a physical equipment inspection or a guarantee of availability.</p></section></aside></div></div>;
 }
 function ActionPinSettings({ user, onUserUpdated }) {
-  const [currentPin, setCurrentPin] = useState('');
-  const [pin, setPin] = useState('');
-  const [confirmation, setConfirmation] = useState('');
+  const [currentPin, setCurrentPin] = useState(emptyPinDigits);
+  const [pin, setPin] = useState(emptyPinDigits);
+  const [confirmation, setConfirmation] = useState(emptyPinDigits);
+  const [code, setCode] = useState(emptyPinDigits);
+  const [codeSent, setCodeSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  function resetEmailCode() { setCodeSent(false); setCode(emptyPinDigits()); setMessage(''); }
+  async function requestEmailCode() {
+    setBusy(true); setMessage('');
+    try {
+      await authRequest('/auth/action-pin/request-code', {
+        ...(user?.hasActionPin ? { currentPin: pinDigitsToString(currentPin) } : {}),
+        pin: pinDigitsToString(pin), confirmation: pinDigitsToString(confirmation),
+      });
+      setCodeSent(true);
+      setMessage(`A six-digit verification code was sent to ${user?.email || 'your account email'}.`);
+    } catch (error) { setMessage(error.message || 'The verification code could not be sent.'); }
+    finally { setBusy(false); }
+  }
   async function save(event) {
     event.preventDefault(); setBusy(true); setMessage('');
     try {
       const { data } = await authRequest('/auth/action-pin', {
-        ...(user?.hasActionPin ? { currentPin } : {}), pin, confirmation,
+        ...(user?.hasActionPin ? { currentPin: pinDigitsToString(currentPin) } : {}),
+        pin: pinDigitsToString(pin), confirmation: pinDigitsToString(confirmation), code: pinDigitsToString(code),
       });
       onUserUpdated(data.user);
-      setCurrentPin(''); setPin(''); setConfirmation('');
+      setCurrentPin(emptyPinDigits()); setPin(emptyPinDigits()); setConfirmation(emptyPinDigits()); setCode(emptyPinDigits()); setCodeSent(false);
       setMessage('Your action PIN is saved.');
     } catch (error) { setMessage(error.message || 'The action PIN could not be saved.'); }
     finally { setBusy(false); }
   }
-  const pinProps = { type:'password', inputMode:'numeric', pattern:'[0-9]{6}', minLength:6, maxLength:6, autoComplete:'new-password' };
-  const updatePin = setter => event => setter(event.target.value.replace(/\D/g,'').slice(0,6));
-  return <section className="panel action-pin-settings"><PanelHead title="Role action PIN" subtitle={`A private six-digit PIN for protected ${user?.role || 'account'} actions.`}/><form className="action-pin-settings-form" onSubmit={save}>{user?.hasActionPin&&<Field icon={LockKeyhole} label="CURRENT ACTION PIN" {...pinProps} autoComplete="current-password" value={currentPin} onChange={updatePin(setCurrentPin)} required/>}<Field icon={LockKeyhole} label={user?.hasActionPin?'NEW SIX-DIGIT PIN':'CREATE SIX-DIGIT PIN'} {...pinProps} value={pin} onChange={updatePin(setPin)} required/><Field icon={LockKeyhole} label="CONFIRM PIN" {...pinProps} value={confirmation} onChange={updatePin(setConfirmation)} required/><small>This PIN protects booking requests, machinery publishing, booking acceptance, and logistics job acceptance where those actions apply to your role.</small><div className="settings-actions"><button className="button button-primary" disabled={busy}>{busy?'Saving…':user?.hasActionPin?'Change action PIN':'Save action PIN'} <Check size={14}/></button></div>{message&&<p className="settings-help" role="status">{message}</p>}</form></section>;
+  function changePin(setter, value) { setter(value); resetEmailCode(); }
+  return <section className="panel action-pin-settings"><PanelHead title="Role action PIN" subtitle={`A private six-digit PIN for protected ${user?.role || 'account'} actions.`}/><form className="action-pin-settings-form" onSubmit={event=>codeSent?save(event):(event.preventDefault(),requestEmailCode())}>{user?.hasActionPin&&<PinCodeField label="CURRENT ACTION PIN" value={currentPin} onChange={value=>changePin(setCurrentPin,value)} autoFocus/>}<PinCodeField label={user?.hasActionPin?'NEW SIX-DIGIT PIN':'CREATE SIX-DIGIT PIN'} value={pin} onChange={value=>changePin(setPin,value)} autoFocus={!user?.hasActionPin}/><PinCodeField label="CONFIRM PIN" value={confirmation} onChange={value=>changePin(setConfirmation,value)}/>{codeSent&&<PinCodeField label="EMAIL VERIFICATION CODE" value={code} onChange={setCode} masked={false} autoFocus/>}<small>This six-digit PIN protects actions for your role. We’ll email a one-time code to {user?.email || 'your account email'} before saving a new or changed PIN.</small><div className="settings-actions"><button type="button" className="button button-ghost" onClick={requestEmailCode} disabled={busy}>{busy&&!codeSent?'Sending code…':codeSent?'Resend verification code':'Email me a verification code'} <Mail size={14}/></button>{codeSent&&<button className="button button-primary" disabled={busy}>{busy?'Verifying…':'Verify & save PIN'} <Check size={14}/></button>}</div>{message&&<p className="settings-help" role="status">{message}</p>}</form></section>;
 }
 
 function SettingsPage({ currentUser, onUserUpdated }) {

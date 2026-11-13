@@ -13,6 +13,7 @@ import { actionPinLimiter, checkActionPin } from '../middleware/requireActionPin
 const router = Router();
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: 'draft-8', legacyHeaders: false });
 const codeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false });
+const actionPinCodeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false });
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const normalizeEmail = value => String(value || '').trim().toLowerCase();
 const commonPasswords = new Set(['password1234', 'password12345', 'qwerty123456', '123456789012', 'letmein12345', 'welcome12345']);
@@ -214,7 +215,7 @@ router.post('/google', authLimiter, requireTurnstile, async (request, response) 
 
 router.get('/me', requireAuth, (request, response) => response.json({ data: { user: publicUser(request.user) } }));
 
-router.post('/action-pin', requireAuth, actionPinLimiter, async (request, response) => {
+router.post('/action-pin/request-code', requireAuth, actionPinLimiter, actionPinCodeLimiter, async (request, response) => {
   const pin = request.body?.pin;
   const confirmation = request.body?.confirmation;
   if (!actionPinIsValid(pin)) return response.status(400).json({ error: 'Choose a six-digit numeric action PIN.' });
@@ -228,6 +229,47 @@ router.post('/action-pin', requireAuth, actionPinLimiter, async (request, respon
       return response.status(403).json({ error: 'Enter your current action PIN to change it.' });
     }
   }
+  await sendCode({ email: user.email, name: user.name, purpose: 'action-pin' });
+  return response.status(202).json({ data: { sent: true }, message: 'A verification code has been sent to your account email.' });
+});
+
+router.post('/action-pin', requireAuth, actionPinLimiter, async (request, response) => {
+  const pin = request.body?.pin;
+  const confirmation = request.body?.confirmation;
+  const code = String(request.body?.code || '').trim();
+  if (!actionPinIsValid(pin)) return response.status(400).json({ error: 'Choose a six-digit numeric action PIN.' });
+  if (pin !== confirmation) return response.status(400).json({ error: 'The action PIN confirmation does not match.' });
+  if (!/^\d{6}$/.test(code)) return response.status(400).json({ error: 'Enter the six-digit email verification code.' });
+
+  const user = await User.findById(request.user._id).select('+actionPinHash');
+  if (!user) return response.status(404).json({ error: 'Account not found.' });
+  if (user.actionPinHash) {
+    const currentPin = request.body?.currentPin;
+    if (!actionPinIsValid(currentPin) || !(await bcrypt.compare(currentPin, user.actionPinHash))) {
+      return response.status(403).json({ error: 'Enter your current action PIN to change it.' });
+    }
+  }
+
+  const challenge = await EmailCode.findOne({
+    email: user.email, purpose: 'action-pin', consumedAt: null, expiresAt: { $gt: new Date() },
+  });
+  if (!challenge) return response.status(400).json({ error: 'That email code has expired. Request a new code.' });
+  if (challenge.attempts >= 5) {
+    await challenge.deleteOne();
+    return response.status(429).json({ error: 'Too many attempts. Request a new email code.' });
+  }
+  if (!codeMatches(user.email, 'action-pin', code, challenge.codeHash)) {
+    challenge.attempts += 1;
+    await challenge.save();
+    return response.status(400).json({ error: 'That email code is incorrect.' });
+  }
+  const claimedChallenge = await EmailCode.findOneAndUpdate(
+    { _id: challenge._id, consumedAt: null, expiresAt: { $gt: new Date() }, attempts: { $lt: 5 } },
+    { $set: { consumedAt: new Date() } },
+    { new: true },
+  );
+  if (!claimedChallenge) return response.status(400).json({ error: 'That email code has already been used. Request a new code.' });
+
   user.actionPinHash = await bcrypt.hash(pin, 12);
   user.actionPinSetAt = new Date();
   await user.save();

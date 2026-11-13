@@ -1767,3 +1767,32 @@ button,.button,input,select,textarea{line-height:1.4}
 .auth-paste-code{justify-self:start;display:inline-flex;align-items:center;gap:7px;min-height:28px;padding:3px 0;border:0;background:transparent;color:var(--green);font-size:11px;font-weight:700;cursor:pointer}
 .auth-paste-code:hover{text-decoration:underline}
 .auth-clipboard-notice{color:var(--muted);font-size:10px;line-height:1.5}
+
+/* Six-cell PIN fields stay legible and easy to use on narrow screens. */
+.pin-code-field{display:grid;gap:6px;min-width:0}
+.pin-code-control{display:flex;align-items:center;gap:8px;min-width:0;min-height:48px;padding:5px 7px;border:1px solid var(--line2);border-radius:9px;background:var(--surface)}
+.pin-code-boxes{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));flex:1;gap:6px;min-width:0}
+.pin-code-boxes input{box-sizing:border-box;width:100%;min-width:0;height:38px;padding:0;border:1px solid var(--line2);border-radius:7px;background:var(--card2);color:var(--white);text-align:center;font-size:17px;font-weight:700;caret-color:var(--green)}
+.pin-code-boxes input:focus{outline:2px solid var(--green);outline-offset:1px}
+.pin-code-boxes input:disabled{opacity:.55}
+.pin-visibility-toggle{display:grid;flex:none;width:36px;height:36px;place-items:center;border:0;border-radius:8px;background:transparent;color:var(--muted);cursor:pointer}
+.pin-visibility-toggle:hover{background:var(--card2);color:var(--green)}
+.action-pin-settings .panel-head h2{color:var(--white)}
+.action-pin-settings .panel-head>div>p{color:var(--muted)}
+.action-pin-settings .field-label{color:var(--white)}
+.action-pin-settings-form>small{display:block;color:var(--muted);font-size:11px;line-height:1.65}
+.action-pin-settings-form .settings-actions{display:flex;flex-wrap:wrap;gap:8px}
+.action-pin-settings-form .settings-help{margin:0;color:var(--muted);font-size:11px;line-height:1.55;overflow-wrap:anywhere}
+:root[data-theme="light"] .action-pin-settings .panel-head h2{color:#17271d}
+:root[data-theme="light"] .action-pin-settings .panel-head>div>p{color:#536b5b}
+:root[data-theme="light"] .action-pin-settings .field-label{color:#314b38}
+:root[data-theme="light"] .action-pin-settings-form>small,:root[data-theme="light"] .action-pin-settings-form .settings-help{color:#536b5b}
+:root[data-theme="light"] .action-pin-settings .pin-code-control{border-color:#ceddd1;background:#f7faf7}
+:root[data-theme="light"] .action-pin-settings .pin-code-boxes input{border-color:#d4e0d6;background:#fff;color:#17271d}
+:root[data-theme="light"] .action-pin-settings .pin-visibility-toggle{color:#52695a}
+:root[data-theme="light"] .action-pin-settings .pin-visibility-toggle:hover{background:#e8f2e9;color:#087f54}
+:root[data-theme="light"] .action-pin-settings .button-ghost{border-color:#cbdacf;background:#fff;color:#294633}
+/* Keep headings and supporting copy readable on every light-theme workspace card. */
+:root[data-theme="light"] .workspace .panel-head h2{color:#17271d}
+:root[data-theme="light"] .workspace .panel-head>div>p{color:#536b5b}
+@media(max-width:540px){.pin-code-boxes{gap:5px}.pin-code-boxes input{height:36px;font-size:16px}.pin-code-control{gap:5px;padding:5px}.pin-visibility-toggle{width:32px;height:32px}.action-pin-settings-form .settings-actions>.button{flex:1 1 100%}}

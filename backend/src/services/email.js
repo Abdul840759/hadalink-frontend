@@ -12,7 +12,8 @@ export async function sendEmailCode({ email, name, code, purpose }) {
   }
 
   const reset = purpose === 'password-reset';
-  const subject = reset ? 'Reset your HadaLink password' : 'Verify your HadaLink email';
+  const actionPin = purpose === 'action-pin';
+  const subject = reset ? 'Reset your HadaLink password' : actionPin ? 'Verify your HadaLink action PIN' : 'Verify your HadaLink email';
   const frontendOrigins = (process.env.FRONTEND_ORIGIN || 'https://haddalink.vercel.app')
     .split(',').map(value => value.trim()).filter(Boolean);
   const frontendOrigin = frontendOrigins.find(value => value.startsWith('https://')) || frontendOrigins[0];
@@ -23,11 +24,13 @@ export async function sendEmailCode({ email, name, code, purpose }) {
   } catch {
     // The email remains complete if the frontend origin is not configured as a URL.
   }
-  const preheader = reset ? 'Your secure HadaLink password reset code.' : 'One quick step to finish setting up your HadaLink account.';
-  const heading = reset ? 'Reset your password' : 'Verify your email';
+  const preheader = reset ? 'Your secure HadaLink password reset code.' : actionPin ? 'Confirm this change to your HadaLink action PIN.' : 'One quick step to finish setting up your HadaLink account.';
+  const heading = reset ? 'Reset your password' : actionPin ? 'Confirm your action PIN' : 'Verify your email';
   const intro = reset
     ? 'Enter this secure code on HadaLink to choose a new password.'
-    : 'Enter this secure code on HadaLink to verify your email and finish creating your account.';
+    : actionPin
+      ? 'Enter this one-time code in Settings to securely create or change your role action PIN.'
+      : 'Enter this secure code on HadaLink to verify your email and finish creating your account.';
   const logo = logoUrl
     ? `<img src="${escapeHtml(logoUrl)}" width="42" height="42" alt="HadaLink" style="display:block;width:42px;height:42px;border:0;border-radius:12px">`
     : '<span style="display:inline-block;color:#f8fbf7;font-size:20px;font-weight:700;line-height:42px">H</span>';

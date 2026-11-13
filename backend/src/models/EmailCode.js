@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 const emailCodeSchema = new mongoose.Schema({
   email: { type: String, required: true, lowercase: true, trim: true, index: true },
   codeHash: { type: String, required: true },
-  purpose: { type: String, enum: ['sign-up', 'password-reset'], required: true },
+  purpose: { type: String, enum: ['sign-up', 'password-reset', 'action-pin'], required: true },
   pendingName: { type: String, trim: true, maxlength: 120 },
   pendingRole: { type: String, enum: ['farmer', 'provider'] },
   pendingPasswordHash: { type: String, select: false },
