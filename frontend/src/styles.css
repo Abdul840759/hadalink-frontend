@@ -1742,3 +1742,18 @@ button,.button,input,select,textarea{line-height:1.4}
 .transport-location-notice{display:flex;align-items:flex-start;gap:7px;margin:12px 0 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--muted);font-size:10px;line-height:1.55}
 .transport-location-notice>svg{flex:none;color:var(--green)}
 @media(max-width:540px){.image-carousel{height:106px}.farmer-detail-image{height:170px}.farmer-detail-image.real-image-empty{height:170px;min-height:170px}.image-carousel-arrow{width:30px;height:30px}.listing-location-action>small{font-size:9px}.farmer-live-location-link{font-size:10px}}
+
+.action-pin-backdrop{position:fixed;inset:0;z-index:120;display:grid;place-items:center;padding:18px;background:rgba(2,10,6,.72);backdrop-filter:blur(7px)}
+.action-pin-dialog{width:min(440px,100%);padding:23px;border:1px solid var(--line2);border-radius:18px;background:var(--card);box-shadow:0 24px 80px #0007}
+.action-pin-dialog>header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.action-pin-icon{display:grid;width:42px;height:42px;place-items:center;border:1px solid var(--line2);border-radius:12px;background:var(--surface);color:var(--green)}
+.action-pin-dialog>header>button{display:grid;width:34px;height:34px;place-items:center;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--muted);cursor:pointer}
+.action-pin-dialog>.eyebrow{color:var(--yellow);font-size:9px;letter-spacing:.11em}
+.action-pin-dialog>h2{margin:8px 0;font:700 23px var(--display);color:var(--white)}
+.action-pin-dialog>p{margin:0 0 18px;color:var(--muted);font-size:12px;line-height:1.65}
+.action-pin-dialog form,.action-pin-settings-form{display:grid;gap:13px}
+.action-pin-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
+.action-pin-settings{padding:18px}
+.action-pin-settings-form>small{color:var(--muted);font-size:10px;line-height:1.6}
+.action-pin-settings-form .settings-actions{margin-top:0}
+@media(max-width:540px){.action-pin-backdrop{padding:12px}.action-pin-dialog{padding:18px;border-radius:15px}.action-pin-dialog>h2{font-size:20px}.action-pin-settings{padding:14px}}

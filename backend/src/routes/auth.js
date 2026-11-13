@@ -8,6 +8,7 @@ import requireAuth from '../middleware/requireAuth.js';
 import requireTurnstile from '../middleware/requireTurnstile.js';
 import { sendEmailCode } from '../services/email.js';
 import { createSession, destroySession, publicUser } from '../services/sessions.js';
+import { actionPinLimiter, checkActionPin } from '../middleware/requireActionPin.js';
 
 const router = Router();
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: 'draft-8', legacyHeaders: false });
@@ -16,6 +17,7 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const normalizeEmail = value => String(value || '').trim().toLowerCase();
 const commonPasswords = new Set(['password1234', 'password12345', 'qwerty123456', '123456789012', 'letmein12345', 'welcome12345']);
 const passwordIsValid = value => typeof value === 'string' && value.length >= 12 && Buffer.byteLength(value, 'utf8') <= 72 && !commonPasswords.has(value.toLowerCase());
+const actionPinIsValid = value => typeof value === 'string' && /^\d{6}$/.test(value);
 
 function codeDigest(email, purpose, code) {
   const secret = process.env.CODE_HASH_SECRET || process.env.SESSION_SECRET;
@@ -211,6 +213,33 @@ router.post('/google', authLimiter, requireTurnstile, async (request, response) 
 });
 
 router.get('/me', requireAuth, (request, response) => response.json({ data: { user: publicUser(request.user) } }));
+
+router.post('/action-pin', requireAuth, actionPinLimiter, async (request, response) => {
+  const pin = request.body?.pin;
+  const confirmation = request.body?.confirmation;
+  if (!actionPinIsValid(pin)) return response.status(400).json({ error: 'Choose a six-digit numeric action PIN.' });
+  if (pin !== confirmation) return response.status(400).json({ error: 'The action PIN confirmation does not match.' });
+
+  const user = await User.findById(request.user._id).select('+actionPinHash');
+  if (!user) return response.status(404).json({ error: 'Account not found.' });
+  if (user.actionPinHash) {
+    const currentPin = request.body?.currentPin;
+    if (!actionPinIsValid(currentPin) || !(await bcrypt.compare(currentPin, user.actionPinHash))) {
+      return response.status(403).json({ error: 'Enter your current action PIN to change it.' });
+    }
+  }
+  user.actionPinHash = await bcrypt.hash(pin, 12);
+  user.actionPinSetAt = new Date();
+  await user.save();
+  return response.json({ data: { user: publicUser(user), message: 'Action PIN saved.' } });
+});
+
+router.post('/verify-action-pin', requireAuth, actionPinLimiter, async (request, response) => {
+  const result = await checkActionPin(request.user._id, request.body?.pin);
+  if (!result.configured) return response.status(428).json({ error: 'Create an action PIN before continuing.' });
+  if (!result.ok) return response.status(403).json({ error: 'The action PIN is incorrect.' });
+  return response.json({ data: { verified: true } });
+});
 
 router.post('/cloudinary/signature', requireAuth, (request, response) => {
   const { CLOUDINARY_CLOUD_NAME: cloudName, CLOUDINARY_API_KEY: apiKey, CLOUDINARY_API_SECRET: apiSecret } = process.env;

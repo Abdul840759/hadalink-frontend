@@ -45,6 +45,7 @@ export function publicUser(user) {
     email: user.email,
     emailVerified: user.emailVerified,
     role: user.role,
+    hasActionPin: Boolean(user.actionPinSetAt || user.actionPinHash),
     profile: user.profile,
   };
 }

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import requireAuth from '../middleware/requireAuth.js';
+import { requireActionPinFor } from '../middleware/requireActionPin.js';
 import { BookingRequest, Equipment } from '../models/index.js';
 import { mongoose } from '../config/database.js';
 
@@ -50,7 +51,11 @@ router.get('/jobs', requireAuth, requireLogistics, requireDatabase, async (reque
   return response.json({ data: items });
 });
 
-router.patch('/:id/decision', requireAuth, requireLogistics, requireDatabase, async (request, response) => {
+const requireActionPinForAcceptance = (request, response, next) => String(request.body?.decision || '').toLowerCase() === 'accept'
+  ? requireActionPinFor('logistics')(request, response, next)
+  : next();
+
+router.patch('/:id/decision', requireAuth, requireLogistics, requireDatabase, requireActionPinForAcceptance, async (request, response) => {
   if (!mongoose.isValidObjectId(request.params.id)) return response.status(400).json({ error: 'Invalid transport request.' });
   const decision = String(request.body?.decision || '').toLowerCase();
   if (!['accept', 'decline'].includes(decision)) return response.status(400).json({ error: 'Choose accept or decline.' });

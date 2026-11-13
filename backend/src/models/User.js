@@ -10,6 +10,8 @@ const userSchema = new mongoose.Schema({
   emailVerified: { type: Boolean, default: false },
   name: { type: String, required: true, trim: true, maxlength: 120 },
   passwordHash: { type: String, select: false },
+  actionPinHash: { type: String, select: false },
+  actionPinSetAt: { type: Date },
   role: { type: String, enum: ['farmer', 'provider', 'logistics'], required: true },
   identities: { type: [authIdentitySchema], default: [] },
   profile: {

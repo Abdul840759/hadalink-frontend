@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import requireAuth from '../middleware/requireAuth.js';
+import { requireActionPinFor } from '../middleware/requireActionPin.js';
 import { BookingRequest, Equipment } from '../models/index.js';
 import { mongoose } from '../config/database.js';
 
@@ -28,7 +29,7 @@ router.get('/', requireAuth, requireDatabase, async (request, response) => {
   return response.json({ data: items });
 });
 
-router.post('/', requireAuth, requireDatabase, async (request, response) => {
+router.post('/', requireAuth, requireDatabase, requireActionPinFor('farmer'), async (request, response) => {
   if (request.user.role !== 'farmer') return response.status(403).json({ error: 'Only farmer accounts can request equipment.' });
   const body = request.body || {};
   if (!mongoose.isValidObjectId(body.equipment)) return response.status(400).json({ error: 'Choose a valid equipment listing.' });
@@ -67,7 +68,11 @@ router.post('/', requireAuth, requireDatabase, async (request, response) => {
   return response.status(201).json({ data: populated });
 });
 
-router.patch('/:id/status', requireAuth, requireDatabase, async (request, response) => {
+const requireActionPinForAcceptance = (request, response, next) => String(request.body?.status || '').toLowerCase() === 'accepted'
+  ? requireActionPinFor('provider')(request, response, next)
+  : next();
+
+router.patch('/:id/status', requireAuth, requireDatabase, requireActionPinForAcceptance, async (request, response) => {
   if (request.user.role !== 'provider') return response.status(403).json({ error: 'Only providers can update booking requests.' });
   if (!mongoose.isValidObjectId(request.params.id)) return response.status(400).json({ error: 'Invalid booking request id.' });
   const status = String(request.body?.status || '').toLowerCase();

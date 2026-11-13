@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { Equipment, equipmentCategories } from '../models/index.js';
 import { mongoose } from '../config/database.js';
 import requireAuth from '../middleware/requireAuth.js';
+import { requireActionPinFor } from '../middleware/requireActionPin.js';
 
 const router = Router();
 const escapeRegex = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -68,7 +69,7 @@ router.get('/mine', requireAuth, requireDatabase, async (request, response) => {
   return response.json({ data: items });
 });
 
-router.post('/', requireAuth, requireDatabase, async (request, response) => {
+router.post('/', requireAuth, requireDatabase, requireActionPinFor('provider'), async (request, response) => {
   if (request.user.role !== 'provider') return response.status(403).json({ error: 'Only provider accounts can publish equipment listings.' });
 
   const body = request.body || {};
