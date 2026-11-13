@@ -13,7 +13,7 @@ const testSecret = () => process.env.PAYSTACK_SECRET_KEY?.startsWith('sk_test_')
 async function paystackRequest(path, options = {}) {
   const secret = testSecret();
   if (!secret) {
-    const error = new Error('Paystack test mode is not configured on the server.');
+    const error = new Error('Online payments are temporarily unavailable. Please try again later.');
     error.status = 503;
     throw error;
   }
@@ -23,7 +23,7 @@ async function paystackRequest(path, options = {}) {
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok || payload?.status !== true) {
-    const error = new Error('Paystack could not complete the payment request. Check the test key and try again.');
+    const error = new Error('Paystack could not start this payment. Please try again later.');
     error.status = 502;
     throw error;
   }
@@ -93,7 +93,7 @@ router.get('/verify', requireAuth, async (request, response) => {
   const expectedAmount = booking.payment?.amountKobo;
   if (result.status !== 'success') return response.status(409).json({ error: 'Paystack has not confirmed a successful payment yet.', paymentStatus: result.status });
   if (result.domain !== 'test' || result.reference !== reference || result.currency !== 'NGN' || result.amount !== expectedAmount) {
-    return response.status(409).json({ error: 'The payment details did not match this test booking. Contact support before retrying.' });
+    return response.status(409).json({ error: 'The payment details could not be confirmed for this booking. Contact support before retrying.' });
   }
   booking.payment.status = 'paid';
   booking.payment.transactionId = String(result.id);
