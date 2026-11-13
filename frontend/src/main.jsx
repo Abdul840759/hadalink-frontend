@@ -156,7 +156,7 @@ function mapBookingRecord(record) {
   const status = ({ pending: 'Pending', accepted: 'Accepted', declined: 'Declined', completed: 'Completed', cancelled: 'Cancelled' })[record.status] || 'Pending';
   const date = record.requestedDate ? new Date(record.requestedDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
   const transportStatus = ({ not_requested: 'Not requested', requested: 'Requested', accepted: 'Accepted', scheduled: 'Scheduled', picked_up: 'Picked up', in_transit: 'In transit', delivered: 'Delivered', cancelled: 'Cancelled', unfulfilled: 'Unfulfilled' })[record.transport?.status] || 'Not requested';
-  return { id: record._id, farmer: record.farmer?.name || '', farmerEmail: record.farmer?.email || '', farmerPhone: record.farmer?.profile?.phone || '', provider: record.provider?.profile?.businessName || record.provider?.name || '', logisticsProvider: record.transport?.provider?.profile?.businessName || record.transport?.provider?.name || '', place: record.location || '', service: record.service || '', machine: record.equipment?.name || '', machineKind: record.equipment?.category || '', machineArea: [record.equipment?.location?.lga, record.equipment?.location?.area].filter(Boolean).join(', '), pickupAddress: record.equipment?.location?.pickupAddress || '', machineCoordinates: record.equipment?.location?.coordinates || null, liveLocation: record.transport?.liveLocation || null, hectares: `${record.hectares || 0} ha`, amount: `₦${Number(record.quotedAmount || 0).toLocaleString('en-NG')}`, amountValue: Number(record.quotedAmount || 0), transportRequested: record.transport?.requested === true, transportFee: Number(record.transport?.fee || 0), transportStatus, transportStatusKey: record.transport?.status || 'not_requested', transportJobId: record._id, transportRequirements: record.transport?.requirements || '', deliveryNote: record.transport?.deliveryNote || '', date, requestedDate: record.requestedDate || '', completedAt: record.completedAt || '', status, equipmentId: record.equipment?._id, note: record.note || '', operator: record.equipment?.operatorArrangement === 'not-included' ? 'Equipment only' : 'Operator by arrangement', rating: record.review?.rating, review: record.review?.text || '' };
+  return { id: record._id, farmer: record.farmer?.name || '', farmerEmail: record.farmer?.email || '', farmerPhone: record.farmer?.profile?.phone || '', provider: record.provider?.profile?.businessName || record.provider?.name || '', logisticsProvider: record.transport?.provider?.profile?.businessName || record.transport?.provider?.name || '', place: record.location || '', service: record.service || '', machine: record.equipment?.name || '', machineKind: record.equipment?.category || '', machineArea: [record.equipment?.location?.lga, record.equipment?.location?.area].filter(Boolean).join(', '), pickupAddress: record.equipment?.location?.pickupAddress || '', machineCoordinates: record.equipment?.location?.coordinates || null, liveLocation: record.transport?.liveLocation || null, hectares: `${record.hectares || 0} ha`, amount: `₦${Number(record.quotedAmount || 0).toLocaleString('en-NG')}`, amountValue: Number(record.quotedAmount || 0), paymentStatus: record.payment?.status || 'unpaid', transportRequested: record.transport?.requested === true, transportFee: Number(record.transport?.fee || 0), transportStatus, transportStatusKey: record.transport?.status || 'not_requested', transportJobId: record._id, transportRequirements: record.transport?.requirements || '', deliveryNote: record.transport?.deliveryNote || '', date, requestedDate: record.requestedDate || '', completedAt: record.completedAt || '', status, equipmentId: record.equipment?._id, note: record.note || '', operator: record.equipment?.operatorArrangement === 'not-included' ? 'Equipment only' : 'Operator by arrangement', rating: record.review?.rating, review: record.review?.text || '' };
 }
 
 function captureCurrentLocation() {
@@ -417,6 +417,7 @@ function App() {
   const [providerListingsLoading, setProviderListingsLoading] = useState(false);
   const [providerListingsError, setProviderListingsError] = useState('');
   const authBootstrapInFlight = React.useRef(false);
+  const paymentReturnHandled = React.useRef(false);
   const [requestsState, setRequestsState] = useState([]);
   const [transportRequests, setTransportRequests] = useState([]);
   const [transportJobs, setTransportJobs] = useState([]);
@@ -519,6 +520,26 @@ function App() {
       .then(({ data }) => { if (Array.isArray(data)) setRequestsState(data.map(mapBookingRecord)); })
       .catch(error => { console.error('Could not load bookings:', error); setBookingsError(error.message || 'Bookings could not be loaded.'); })
       .finally(() => setBookingsLoading(false));
+  }, [currentUser, page]);
+  React.useEffect(() => {
+    if (paymentReturnHandled.current || currentUser?.role !== 'farmer' || page !== 'My bookings') return;
+    const params = new URLSearchParams(window.location.search);
+    const reference = params.get('reference') || params.get('trxref');
+    if (!reference) return;
+    paymentReturnHandled.current = true;
+    authRequest(`/payments/verify?reference=${encodeURIComponent(reference)}`, undefined, 'GET')
+      .then(async ({data}) => {
+        if (data?.status !== 'paid') throw new Error('Paystack has not confirmed payment yet. Refresh your bookings in a moment.');
+        const refreshed = await authRequest('/bookings', undefined, 'GET');
+        if (Array.isArray(refreshed.data)) setRequestsState(refreshed.data.map(mapBookingRecord));
+        setNotice('Payment confirmed in Paystack test mode.');
+      })
+      .catch(error => setNotice(error.message || 'Payment could not be verified.'))
+      .finally(() => {
+        params.delete('reference'); params.delete('trxref'); params.delete('status');
+        const query = params.toString();
+        history.replaceState(history.state, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+      });
   }, [currentUser, page]);
   React.useEffect(() => {
     if (currentUser?.role !== 'farmer' || page !== 'Track machinery' || !requestsState.some(item => item.transportStatusKey === 'in_transit')) return undefined;
@@ -661,7 +682,7 @@ function App() {
     {isLogistics&&<LogisticsWorkspace page={page} user={currentUser} requests={transportRequests} jobs={transportJobs} loading={transportLoading} onRefresh={refreshTransport} onDecision={decideTransport} onStatus={updateTransportStatus} onUserUpdated={setCurrentUser} requestActionPin={requestActionPin} flash={flash} go={go}/>}
     {page==='Find Machinery'&&isFarmer&&<FarmerDashboard machinesState={machinesState} requestsState={requestsState} setRequestsState={setRequestsState} loading={machinesLoading} error={machinesError} search={search} requestActionPin={requestActionPin}/>}
 
-    {isFarmer&&page==='My bookings'&&<FarmerBookings requestsState={requestsState} setRequestsState={setRequestsState} loading={bookingsLoading} error={bookingsError} go={go}/>}
+    {isFarmer&&page==='My bookings'&&<FarmerBookings requestsState={requestsState} setRequestsState={setRequestsState} loading={bookingsLoading} error={bookingsError} go={go} requestActionPin={requestActionPin}/>}
     {isFarmer&&page==='Track machinery'&&<FarmerTracking requestsState={requestsState} go={go}/>}
     {page==='My Machinery'&&<Machinery machinesState={providerListings} loading={providerListingsLoading} setMachinesState={setProviderListings} filter={filter} setFilter={setFilter} search={search} setSearch={setSearch} go={go} flash={flash}/>}
     {page==='Add Machinery'&&<AddMachine flash={flash} go={go} setProviderListings={setProviderListings} user={currentUser} requestActionPin={requestActionPin}/>}{page==='Edit Machinery'&&<EditMachine machine={editingMachine} setMachinesState={setProviderListings} go={go} flash={flash}/>}
@@ -1221,12 +1242,24 @@ function FarmerDashboard({ machinesState, requestsState, setRequestsState, loadi
     </form></section></div>,document.body)}
   </div>;
 }
-function FarmerBookings({ requestsState, setRequestsState, loading, error, go }) {
+function FarmerBookings({ requestsState, setRequestsState, loading, error, go, requestActionPin }) {
   const [reviewing, setReviewing] = useState('');
   const [rating, setRating] = useState('5');
   const [reviewText, setReviewText] = useState('');
   const [saving, setSaving] = useState(false);
+  const [paying, setPaying] = useState('');
   const [message, setMessage] = useState('');
+  async function startPayment(request) {
+    setPaying(request.id); setMessage('');
+    try {
+      const actionPin = await requestActionPin('pay for this accepted booking');
+      if (!actionPin) return;
+      const {data} = await authRequest(`/payments/bookings/${request.id}/initialize`, {actionPin});
+      if (!data?.authorizationUrl || !data.authorizationUrl.startsWith('https://checkout.paystack.com/')) throw new Error('Paystack did not return a valid secure checkout link.');
+      window.location.assign(data.authorizationUrl);
+    } catch (requestError) { setMessage(requestError.message || 'Could not start Paystack checkout.'); }
+    finally { setPaying(''); }
+  }
   async function submitReview(event, request) {
     event.preventDefault(); setSaving(true); setMessage('');
     try {
@@ -1239,7 +1272,7 @@ function FarmerBookings({ requestsState, setRequestsState, loading, error, go })
   }
   if(loading)return <div className="panel empty-state" aria-live="polite">Loading your bookings…</div>;
   if(error)return <div className="panel empty-state" role="alert">{error}</div>;
-  return <section className="panel farmer-bookings-page"><PanelHead title="Your bookings" subtitle="Every request and provider update, in one place." action={<button className="button button-primary button-small" onClick={()=>go('Find Machinery')}><Search size={14}/> Find machinery</button>}/>{message&&<p className="settings-help" role="status">{message}</p>}{requestsState.length ? <div className="farmer-request-list">{requestsState.map(request=><article className="farmer-request-row" key={request.id}><div><strong>{request.machine}</strong><span>{request.service} · {request.place} · {request.date}</span><small>{request.hectares} · {request.amount}</small><small>{request.status==='Completed'?'Completed; coordinate payment directly with the provider.':request.status==='Accepted'?'Accepted by the provider. Confirm arrangements directly.':request.status==='Declined'?'The provider declined this request.':`Request ${request.id} · waiting for provider response.`}</small>{request.transportRequested&&<div className="farmer-transport-status"><Truck size={14}/><span><strong>HadaLink transport</strong><small>{request.transportStatus}{request.logisticsProvider?` · ${request.logisticsProvider}`:request.transportStatus==='Requested'?' · Waiting for a provider':''}</small>{request.deliveryNote&&<small>Delivery note: {request.deliveryNote}</small>}</span><b>₦{request.transportFee.toLocaleString('en-NG')}</b></div>}</div><div className="farmer-request-actions"><span className={`table-status table-${request.status.toLowerCase()}`}><i/>{request.status}</span>{request.status==='Completed'&&request.rating?<span className="review-saved">Review saved · {request.rating}/5</span>:request.status==='Completed'&&<button type="button" className="button button-ghost button-small" onClick={()=>{setReviewing(reviewing===request.id?'':request.id);setMessage('')}}>{reviewing===request.id?'Cancel review':'Leave a review'}</button>}</div>{reviewing===request.id&&<form className="farmer-review-form" onSubmit={event=>submitReview(event,request)}><label className="field"><span className="field-label">YOUR RATING</span><span className="field-control"><Star size={15}/><select value={rating} onChange={event=>setRating(event.target.value)}>{[5,4,3,2,1].map(value=><option value={value} key={value}>{value} star{value===1?'':'s'}</option>)}</select></span></label><label className="field"><span className="field-label">YOUR REVIEW</span><textarea required minLength={3} maxLength={2000} value={reviewText} onChange={event=>setReviewText(event.target.value)} placeholder="Share how the booking went." rows="2"/></label><button className="button button-primary" disabled={saving}>{saving?'Saving…':'Submit review'}</button></form>}</article>)}</div> : <div className="empty-state"><CalendarDays size={20}/><strong>No bookings yet</strong><span>When you request equipment, the provider’s response will appear here.</span><button className="button button-primary button-small" onClick={()=>go('Find Machinery')}>Browse equipment <ArrowRight size={13}/></button></div>}</section>;
+  return <section className="panel farmer-bookings-page"><PanelHead title="Your bookings" subtitle="Every request and provider update, in one place." action={<button className="button button-primary button-small" onClick={()=>go('Find Machinery')}><Search size={14}/> Find machinery</button>}/>{message&&<p className="settings-help" role="status">{message}</p>}{requestsState.length ? <div className="farmer-request-list">{requestsState.map(request=><article className="farmer-request-row" key={request.id}><div><strong>{request.machine}</strong><span>{request.service} · {request.place} · {request.date}</span><small>{request.hectares} · {request.amount}{request.transportRequested?` + ₦${request.transportFee.toLocaleString('en-NG')} transport`:''}</small><small>{request.status==='Completed'?'Booking completed.':request.status==='Accepted'?'Accepted by the provider. Pay securely to confirm your booking.':request.status==='Declined'?'The provider declined this request.':`Request ${request.id} · waiting for provider response.`}</small>{request.transportRequested&&<div className="farmer-transport-status"><Truck size={14}/><span><strong>HadaLink transport</strong><small>{request.transportStatus}{request.logisticsProvider?` · ${request.logisticsProvider}`:request.transportStatus==='Requested'?' · Waiting for a provider':''}</small>{request.deliveryNote&&<small>Delivery note: {request.deliveryNote}</small>}</span><b>₦{request.transportFee.toLocaleString('en-NG')}</b></div>}</div><div className="farmer-request-actions"><span className={`table-status table-${request.status.toLowerCase()}`}><i/>{request.status}</span>{request.status==='Accepted'&&request.paymentStatus==='paid'&&<span className="review-saved">Paid · Test mode</span>}{request.status==='Accepted'&&request.paymentStatus!=='paid'&&<button type="button" className="button button-primary button-small" disabled={paying===request.id} onClick={()=>startPayment(request)}><CreditCard size={14}/>{paying===request.id?'Opening checkout…':'Pay securely'}</button>}{request.status==='Completed'&&request.rating?<span className="review-saved">Review saved · {request.rating}/5</span>:request.status==='Completed'&&<button type="button" className="button button-ghost button-small" onClick={()=>{setReviewing(reviewing===request.id?'':request.id);setMessage('')}}>{reviewing===request.id?'Cancel review':'Leave a review'}</button>}</div>{reviewing===request.id&&<form className="farmer-review-form" onSubmit={event=>submitReview(event,request)}><label className="field"><span className="field-label">YOUR RATING</span><span className="field-control"><Star size={15}/><select value={rating} onChange={event=>setRating(event.target.value)}>{[5,4,3,2,1].map(value=><option value={value} key={value}>{value} star{value===1?'':'s'}</option>)}</select></span></label><label className="field"><span className="field-label">YOUR REVIEW</span><textarea required minLength={3} maxLength={2000} value={reviewText} onChange={event=>setReviewText(event.target.value)} placeholder="Share how the booking went." rows="2"/></label><button className="button button-primary" disabled={saving}>{saving?'Saving…':'Submit review'}</button></form>}</article>)}</div> : <div className="empty-state"><CalendarDays size={20}/><strong>No bookings yet</strong><span>When you request equipment, the provider’s response will appear here.</span><button className="button button-primary button-small" onClick={()=>go('Find Machinery')}>Browse equipment <ArrowRight size={13}/></button></div>}</section>;
 }
 function FarmerTracking({ requestsState, go }) {
   const active = requestsState.filter(request=>['Pending','Accepted'].includes(request.status) || (request.transportRequested && !['Delivered','Cancelled','Unfulfilled'].includes(request.transportStatus)));

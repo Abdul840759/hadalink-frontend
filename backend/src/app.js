@@ -7,6 +7,7 @@ import equipmentRouter from './routes/equipment.js';
 import bookingsRouter from './routes/bookings.js';
 import healthRouter from './routes/health.js';
 import transportRouter from './routes/transport.js';
+import paymentsRouter, { handlePaystackWebhook } from './routes/payments.js';
 import requireSiteAccess from './middleware/siteAccess.js';
 
 const app = express();
@@ -25,6 +26,9 @@ app.use(cors({
     return callback(new Error('This origin is not allowed by the API.'));
   },
 }));
+// Paystack signs the original bytes; this endpoint must run before JSON parsing
+// and the browser-only site-access gate.
+app.post('/api/webhooks/paystack', express.raw({ type: 'application/json', limit: '256kb' }), handlePaystackWebhook);
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 app.use('/api', requireSiteAccess);
@@ -38,6 +42,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/equipment', equipmentRouter);
 app.use('/api/bookings', bookingsRouter);
 app.use('/api/transport', transportRouter);
+app.use('/api/payments', paymentsRouter);
 
 app.use((_request, response) => {
   response.status(404).json({ error: 'Route not found' });
