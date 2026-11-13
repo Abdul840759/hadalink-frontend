@@ -28,7 +28,9 @@ export function siteAccessTokenIsValid(token) {
 }
 
 export default function requireSiteAccess(request, response, next) {
-  if (request.path === '/health' || request.path === '/auth/site-access/verify') return next();
+  // Express mounts this middleware at /api, so request.path is the path *within*
+  // that mount (e.g. /health/). Accept the trailing slash used by Render's probe.
+  if (/^\/health\/?$/.test(request.path) || request.path === '/auth/site-access/verify') return next();
   if (process.env.NODE_ENV !== 'production' && ['localhost', '127.0.0.1'].includes(request.hostname)) return next();
   const token = request.get('x-hadalink-site-access');
   if (!siteAccessTokenIsValid(token)) {
