@@ -28,6 +28,8 @@ const machines = [
 ];
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
+const SITE_TURNSTILE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || '';
+const SITE_ACCESS_REQUIRED = import.meta.env.PROD || Boolean(SITE_TURNSTILE_KEY);
 
 function nigerianLocalNumber(value) {
   let digits = String(value || '').replace(/\D/g, '');
@@ -49,10 +51,16 @@ function NigerianPhoneField({ icon: Icon, label, value, onChange, trailing, requ
 async function authRequest(path, body, method = 'POST') {
   let response;
   try {
+    const accessToken = sessionStorage.getItem('hadalink-site-access');
+    const headers = {
+      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      ...(accessToken ? { 'X-HadaLink-Site-Access': accessToken } : {}),
+    };
     response = await fetch(`${API_BASE}${path}`, {
       method,
       credentials: 'include',
-      ...(body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+      headers,
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
   } catch (error) {
     console.error('HadaLink API request failed:', error);
@@ -67,6 +75,69 @@ async function authRequest(path, body, method = 'POST') {
     throw new Error(payload.error || 'The request could not be completed.');
   }
   return payload;
+}
+
+function SiteAccessGate({ siteKey, state, theme, onVerified, onRetry }) {
+  const widgetRef = React.useRef(null);
+  const widgetIdRef = React.useRef(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  React.useEffect(() => {
+    if (state !== 'required' || !siteKey) return undefined;
+    let cancelled = false;
+    let script = document.querySelector('script[data-cloudflare-turnstile]');
+    const renderWidget = () => {
+      if (cancelled || !window.turnstile || !widgetRef.current) return;
+      widgetRef.current.replaceChildren();
+      widgetIdRef.current = window.turnstile.render(widgetRef.current, {
+        sitekey: siteKey,
+        action: 'site-access',
+        theme,
+        callback: async token => {
+          setBusy(true);
+          setMessage('Checking your verification…');
+          try {
+            const response = await fetch(`${API_BASE}/auth/site-access/verify`, {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ turnstileToken: token }),
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || !payload.data?.accessToken) throw new Error(payload.error || 'Verification could not be completed.');
+            sessionStorage.setItem('hadalink-site-access', payload.data.accessToken);
+            onVerified();
+          } catch (error) {
+            setMessage(error.message || 'Verification could not be completed. Try again.');
+            if (widgetIdRef.current !== null) window.turnstile?.reset(widgetIdRef.current);
+          } finally { setBusy(false); }
+        },
+        'expired-callback': () => setMessage('The check expired. Please complete it again.'),
+        'error-callback': () => setMessage('Could not load the bot check. Check your connection and retry.'),
+      });
+    };
+    if (!script) {
+      script = document.createElement('script');
+      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+      script.async = true;
+      script.defer = true;
+      script.dataset.cloudflareTurnstile = 'true';
+      document.head.appendChild(script);
+    }
+    if (window.turnstile) renderWidget();
+    else script.addEventListener('load', renderWidget);
+    return () => {
+      cancelled = true;
+      script?.removeEventListener('load', renderWidget);
+      if (widgetIdRef.current !== null) window.turnstile?.remove(widgetIdRef.current);
+      widgetIdRef.current = null;
+    };
+  }, [state, siteKey, theme, onVerified]);
+
+  return <main className="site-access-screen"><section className="site-access-card">
+    <span className="site-access-brand"><img src="/hadalink-mark.png" alt=""/></span>
+    {state === 'checking' ? <><h1>Checking access</h1><p>Verifying this browser’s HadaLink access pass…</p></> : state === 'config-error' ? <><h1>Security check unavailable</h1><p>HadaLink’s bot protection is not configured correctly yet. Please try again later.</p><button className="button button-ghost" onClick={onRetry}>Retry</button></> : state === 'error' ? <><h1>Could not verify access</h1><p>We couldn’t reach the security service. Check your connection, then try again.</p><button className="button button-primary" onClick={onRetry}>Try again</button></> : <><span className="site-access-eyebrow">HADALINK SECURITY</span><h1>Verify you’re human</h1><p>Complete this quick security check to continue to HadaLink.</p><div className="site-access-widget" ref={widgetRef}/>{busy&&<span className="site-access-status" role="status">Checking your verification…</span>}{message&&<span className="site-access-status" role="status">{message}</span>}</>}
+  </section></main>;
 }
 
 
@@ -354,6 +425,14 @@ function App() {
   const [bookingsError, setBookingsError] = useState('');
   const [editingMachine, setEditingMachine] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
+  const [siteAccess, setSiteAccess] = useState(() => SITE_ACCESS_REQUIRED ? 'checking' : 'passed');
+  const [siteAccessRetry, setSiteAccessRetry] = useState(0);
+  const markSiteAccessVerified = React.useCallback(() => setSiteAccess('passed'), []);
+  const retrySiteAccess = React.useCallback(() => {
+    sessionStorage.removeItem('hadalink-site-access');
+    setSiteAccess('checking');
+    setSiteAccessRetry(value => value + 1);
+  }, []);
   const [actionPinRequest, setActionPinRequest] = useState(null);
   const [onboardingRequired, setOnboardingRequired] = useState(null);
   const [signupRole, setSignupRole] = useState(() => ['Provider','Logistics'].includes(localStorage.getItem('hadalink-role')) ? localStorage.getItem('hadalink-role') : 'Farmer');
@@ -392,13 +471,25 @@ function App() {
     return new Promise(resolve => setActionPinRequest({ hasActionPin: currentUser?.hasActionPin === true, role: currentUser?.role, email: currentUser?.email, action, resolve }));
   }
   React.useEffect(() => {
-    if (publicPages.includes(page) || currentUser || authBootstrapInFlight.current) return undefined;
+    if (!SITE_ACCESS_REQUIRED) { setSiteAccess('passed'); return undefined; }
+    if (!SITE_TURNSTILE_KEY) { setSiteAccess('config-error'); return undefined; }
+    const accessToken = sessionStorage.getItem('hadalink-site-access');
+    if (!accessToken) { setSiteAccess('required'); return undefined; }
+    let active = true;
+    fetch(`${API_BASE}/auth/site-access/status`, {
+      credentials: 'include',
+      headers: { 'X-HadaLink-Site-Access': accessToken },
+    }).then(response => {
+      if (!active) return;
+      if (response.ok) setSiteAccess('passed');
+      else { sessionStorage.removeItem('hadalink-site-access'); setSiteAccess('required'); }
+    }).catch(() => { if (active) setSiteAccess('error'); });
+    return () => { active = false; };
+  }, [siteAccessRetry]);
+  React.useEffect(() => {
+    if (siteAccess !== 'passed' || publicPages.includes(page) || currentUser || authBootstrapInFlight.current) return undefined;
     authBootstrapInFlight.current = true;
-    fetch(`${API_BASE}/auth/me`, { credentials: 'include' })
-      .then(response => {
-        if (!response.ok) throw new Error('Not signed in');
-        return response.json();
-      })
+    authRequest('/auth/me', undefined, 'GET')
       .then(({ data }) => {
         if (!data?.user) throw new Error('Not signed in');
         setCurrentUser(data.user);
@@ -418,7 +509,7 @@ function App() {
       })
       .finally(() => { authBootstrapInFlight.current = false; });
     return undefined;
-  }, [page, currentUser]);
+  }, [page, currentUser, siteAccess]);
   React.useEffect(() => {
     if (!currentUser) return;
     if (currentUser.role === 'logistics') return;
@@ -535,6 +626,7 @@ function App() {
     document.addEventListener('keydown', closeOnEscape);
     return () => document.removeEventListener('keydown', closeOnEscape);
   }, [notificationsOpen]);
+  if (SITE_ACCESS_REQUIRED && siteAccess !== 'passed') return <SiteAccessGate siteKey={SITE_TURNSTILE_KEY} state={siteAccess} theme={theme} onVerified={markSiteAccessVerified} onRetry={retrySiteAccess}/>;
   if (['login','register','forgot'].includes(page)) return <AuthPage page={page} go={go} initialRole={signupRole} theme={theme} toggleTheme={toggleTheme}/>;
   if(page==='landing') return <Landing go={go} theme={theme} toggleTheme={toggleTheme}/>
   if(page==='About') return <AboutPage go={go} theme={theme} toggleTheme={toggleTheme}/>
@@ -683,7 +775,8 @@ function AuthPage({ page, go, initialRole = 'Farmer', theme, toggleTheme }) {
   const googleCallbackRef = React.useRef(null);
   const turnstileRef = React.useRef(null);
   const turnstileWidgetRef = React.useRef(null);
-  const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
+  // The site-wide access check already passed; don't challenge the same visitor twice on auth forms.
+  const turnstileSiteKey = null;
   const register = page === 'register';
   const forgot = page === 'forgot';
   const verificationStage = register && stage === 'verify';

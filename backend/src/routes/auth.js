@@ -9,11 +9,13 @@ import requireTurnstile from '../middleware/requireTurnstile.js';
 import { sendEmailCode } from '../services/email.js';
 import { createSession, destroySession, publicUser } from '../services/sessions.js';
 import { actionPinLimiter, checkActionPin } from '../middleware/requireActionPin.js';
+import { issueSiteAccessToken } from '../middleware/siteAccess.js';
 
 const router = Router();
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: 'draft-8', legacyHeaders: false });
 const codeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false });
 const actionPinCodeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false });
+const siteAccessLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false });
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const normalizeEmail = value => String(value || '').trim().toLowerCase();
 const commonPasswords = new Set(['password1234', 'password12345', 'qwerty123456', '123456789012', 'letmein12345', 'welcome12345']);
@@ -214,6 +216,34 @@ router.post('/google', authLimiter, requireTurnstile, async (request, response) 
 });
 
 router.get('/me', requireAuth, (request, response) => response.json({ data: { user: publicUser(request.user) } }));
+
+router.get('/site-access/status', (_request, response) => response.json({ data: { valid: true } }));
+
+router.post('/site-access/verify', siteAccessLimiter, async (request, response) => {
+  const secret = process.env.TURNSTILE_SECRET_KEY;
+  const token = String(request.body?.turnstileToken || '').trim();
+  if (!secret) return response.status(503).json({ error: 'Site security verification is not configured yet.' });
+  if (!token || token.length > 2048) return response.status(400).json({ error: 'Complete the bot check and try again.' });
+
+  const allowedHosts = new Set((process.env.FRONTEND_ORIGIN || '')
+    .split(',').map(origin => { try { return new URL(origin.trim()).hostname; } catch { return ''; } }).filter(Boolean));
+  try {
+    const verification = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ secret, response: token }),
+      signal: AbortSignal.timeout(5000),
+    });
+    const result = await verification.json();
+    if (!verification.ok || result.success !== true || result.action !== 'site-access' || !allowedHosts.has(result.hostname)) {
+      return response.status(400).json({ error: 'The bot check expired or could not be verified. Please try again.' });
+    }
+    return response.json({ data: { accessToken: issueSiteAccessToken() } });
+  } catch (error) {
+    console.error('[turnstile] Site access verification unavailable:', error.message);
+    return response.status(503).json({ error: 'Bot verification is temporarily unavailable. Please try again.' });
+  }
+});
 
 router.patch('/theme', requireAuth, async (request, response) => {
   const themePreference = request.body?.themePreference;

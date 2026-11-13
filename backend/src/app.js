@@ -7,6 +7,7 @@ import equipmentRouter from './routes/equipment.js';
 import bookingsRouter from './routes/bookings.js';
 import healthRouter from './routes/health.js';
 import transportRouter from './routes/transport.js';
+import requireSiteAccess from './middleware/siteAccess.js';
 
 const app = express();
 // Render terminates TLS and forwards requests through one trusted proxy.
@@ -26,6 +27,7 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
+app.use('/api', requireSiteAccess);
 
 app.get('/api', (_request, response) => {
   response.json({ name: 'HadaLink API', status: 'running' });

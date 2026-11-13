@@ -1807,4 +1807,18 @@ button,.button,input,select,textarea{line-height:1.4}
 :root[data-theme="light"] .appearance-settings .appearance-copy p,:root[data-theme="light"] .appearance-choice{color:#536b5b}
 :root[data-theme="light"] .appearance-choice select{border-color:#cbdacf;background:#fff;color:#17271d}
 @media(max-width:540px){.appearance-settings{grid-template-columns:1fr;gap:12px}.appearance-choice{max-width:none}}
+.site-access-screen{display:grid;min-height:100vh;min-height:100svh;place-items:center;padding:22px;background:radial-gradient(ellipse at 50% 0,rgba(38,145,88,.12),transparent 50%),var(--bg);color:var(--white)}
+.site-access-card{display:grid;justify-items:center;width:min(440px,100%);padding:34px 28px;border:1px solid var(--line);border-radius:20px;background:var(--card);box-shadow:0 22px 70px rgba(10,35,18,.14);text-align:center}
+.site-access-brand{display:grid;width:50px;height:50px;place-items:center;margin-bottom:21px;border:1px solid var(--line2);border-radius:15px;background:var(--surface)}
+.site-access-brand img{display:block;width:34px;height:34px;object-fit:contain}
+.site-access-eyebrow{color:var(--green);font-size:9px;font-weight:800;letter-spacing:1.5px}
+.site-access-card h1{margin:9px 0 8px;color:var(--white);font:700 24px/1.25 var(--display);letter-spacing:-.6px}
+.site-access-card p{max-width:340px;margin:0;color:var(--muted);font-size:12px;line-height:1.65}
+.site-access-widget{min-height:66px;display:grid;place-items:center;max-width:100%;margin-top:19px}
+.site-access-status{max-width:100%;margin-top:11px;color:var(--muted);font-size:10px;line-height:1.5;overflow-wrap:anywhere}
+:root[data-theme="light"] .site-access-screen{color:#17271d}
+:root[data-theme="light"] .site-access-card{border-color:#dce7de;background:#fff;box-shadow:0 22px 70px rgba(30,65,39,.12)}
+:root[data-theme="light"] .site-access-card h1{color:#17271d}
+:root[data-theme="light"] .site-access-card p,:root[data-theme="light"] .site-access-status{color:#536b5b}
+@media(max-width:540px){.site-access-screen{padding:16px}.site-access-card{padding:27px 18px;border-radius:16px}.site-access-card h1{font-size:22px}}
 @media(max-width:540px){.pin-code-boxes{gap:5px}.pin-code-boxes input{height:36px;font-size:16px}.pin-code-control{gap:5px;padding:5px}.pin-visibility-toggle{width:32px;height:32px}.action-pin-settings-form .settings-actions>.button{flex:1 1 100%}}

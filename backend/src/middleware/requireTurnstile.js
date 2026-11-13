@@ -1,3 +1,5 @@
+import { siteAccessTokenIsValid } from './siteAccess.js';
+
 const trustedHostnames = () => new Set(
   (process.env.FRONTEND_ORIGIN || '')
     .split(',')
@@ -6,6 +8,7 @@ const trustedHostnames = () => new Set(
 );
 
 export default async function requireTurnstile(request, response, next) {
+  if (siteAccessTokenIsValid(request.get('x-hadalink-site-access'))) return next();
   const secret = process.env.TURNSTILE_SECRET_KEY;
   if (!secret) return next();
 
